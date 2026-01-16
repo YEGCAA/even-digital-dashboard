@@ -34,6 +34,8 @@ export interface FunnelStage {
   stage: string;
   count: number;
   color: string;
+  value?: number;
+  conversion?: number;
 }
 
 export interface ClientLead {
@@ -44,11 +46,16 @@ export interface ClientLead {
   businessTitle: string;
   pipeline: string;
   stage: string;
+  stageId?: string;
+  quantity?: number;
   date: string;
+  tags?: string[];
 }
 
 export interface CreativePlayback {
   adName: string;
+  campaign: string;
+  adSet: string;
   views3s: number;
   p25: number;
   p50: number;
@@ -63,10 +70,10 @@ export interface DashboardMetrics {
   totalRevenue: number;
   revenuePerUnitManaged: number;
   unitsSoldPerWeek: number;
-  preLaunchSoldRatio: number; 
-  conversionRateLeadToSale: number; 
-  qualifiedLeadRatio: number; 
-  cac: number; 
+  preLaunchSoldRatio: number;
+  conversionRateLeadToSale: number;
+  qualifiedLeadRatio: number;
+  cac: number;
   totalUnitsSold: number;
   totalLeads: number;
   totalSpend: number;
@@ -79,10 +86,11 @@ export interface DashboardMetrics {
     reach: number;
     impressions: number;
     clicks: number;
+    leads: number; // Added leads
     landingPageConvRate: number;
   };
   salesMetrics: {
-    avgResponseTime: string; 
+    avgResponseTime: string;
     totalBilling: number;
     generalConvRate: number;
   };
@@ -97,7 +105,7 @@ export interface DashboardData {
   adsTrend: { date: string; spend: number; leads: number }[];
   creativePlayback: CreativePlayback[];
   dataSource: 'supabase' | 'fallback';
-  rawSample?: any[]; 
+  rawSample?: any[];
   fetchedTables?: string[];
   rawDataByTable?: Record<string, any[]>;
 }

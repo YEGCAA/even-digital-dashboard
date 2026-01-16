@@ -3,7 +3,7 @@ import {
   Moon, Sun,
   BarChart3, Database,
   Users, Search, Mail, Phone,
-  ChevronRight, X,
+  ChevronRight, ChevronLeft, X,
   Loader2, Eye, EyeOff,
   TrendingUp, Target, DollarSign, RefreshCw, Grid,
   Filter, Percent, ShoppingBag, Target as CplIcon,
@@ -12,7 +12,7 @@ import {
   Save, AlertCircle, Award, Trophy, Star,
   Terminal, Code, Clipboard,
   Play, Video, Activity,
-  BarChart as VerticalBarIcon
+  BarChart as VerticalBarIcon, Menu, Sparkles, Copy
 } from 'lucide-react';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 
@@ -21,6 +21,8 @@ import { fetchData, processSupabaseData } from './services/dataService';
 import { DashboardData, LoadingState, UserAuth, ClientLead, DashboardGoals, GoalMode, CreativePlayback } from './types';
 import { FunnelChartComponent } from './components/FunnelChartComponent';
 import { KPICard, KPIStatus } from './components/KPICard';
+import { MarketingEvolutionChart } from './components/MarketingEvolutionChart';
+import { VideoRetentionChart } from './components/VideoRetentionChart';
 import { supabase } from './services/supabase';
 
 const getRowValue = (row: any, possibleKeys: string[]) => {
@@ -34,15 +36,40 @@ const getRowValue = (row: any, possibleKeys: string[]) => {
   return null;
 };
 
+const parseCurrencyValue = (val: string | null): number => {
+  if (!val) return 0;
+  // Remove currency symbols, spaces, and normalize decimal separator
+  // Assuming input might be "R$ 1.200,50" or "1200.50"
+  let clean = val.replace(/[R$\s]/g, '');
+  if (clean.includes(',') && clean.includes('.')) {
+    // Mixed separators (e.g. 1.200,50), remove dots, replace comma with dot
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (clean.includes(',')) {
+    // Only comma (e.g. 1200,50), replace with dot
+    clean = clean.replace(',', '.');
+  }
+  return parseFloat(clean) || 0;
+};
+
 const CAMPAIGN_KEYS = ["Campaign", "Campanha", "campaign_name", "Campaign Name"];
 const ADSET_KEYS = ["Ad Set Name", "Conjunto de Anuncios", "ad_set_name", "adset_name", "Conjunto de anúncios"];
 const AD_KEYS = ["Ad Name", "Nome do Anuncio", "ad_name", "Nome do anúncio", "Anúncio"];
 
-const StatusBadge = ({ status }: { status: KPIStatus }) => {
+export const StatusBadge = ({ status }: { status: KPIStatus }) => {
   if (!status) return null;
-  const color = status === 'BOM' ? 'bg-emerald-500' : status === 'MÉDIA' ? 'bg-amber-500' : 'bg-rose-500';
+  const isGood = status === 'BOM';
+  const isAvg = status === 'MÉDIA';
+  const getStatusStyles = () => {
+    switch (status) {
+      case 'BOM': return 'bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/20';
+      case 'MÉDIA': return 'bg-amber-500 text-white border-amber-600 shadow-sm shadow-amber-500/20';
+      case 'RUIM': return 'bg-rose-500 text-white border-rose-600 shadow-sm shadow-rose-500/20';
+      default: return 'bg-slate-500 text-white border-slate-600';
+    }
+  };
+
   return (
-    <span className={`px-1.5 py-0.5 rounded-[4px] text-[8px] font-black text-white uppercase tracking-tighter ${color}`}>
+    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border-b-2 ${getStatusStyles()} uppercase tracking-wider animate-in fade-in zoom-in duration-300`}>
       {status}
     </span>
   );
@@ -79,30 +106,30 @@ const App: React.FC = () => {
   });
 
   const GoalInputCard = ({ icon: Icon, title, metricKey }: { icon: any, title: string, metricKey: keyof DashboardGoals }) => (
-    <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-primary/10 rounded-xl text-primary"><Icon size={20} /></div>
-        <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase italic tracking-tight">{title}</h4>
+    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-primary"><Icon size={18} /></div>
+        <h4 className="text-sm font-semibold text-slate-800 dark:text-white">{title}</h4>
       </div>
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-2 block">Valor Alvo</label>
+          <label className="text-xs font-medium text-slate-500 mb-1.5 block">Valor Alvo</label>
           <input
             type="number"
             value={goals[metricKey].value}
             onChange={(e) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: parseFloat(e.target.value) || 0 } })}
-            className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-white italic"
+            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
           />
         </div>
         {(metricKey === 'amountSpent' || metricKey === 'leads') && (
           <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-2 block">Modo de Cálculo</label>
+            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Modo de Cálculo</label>
             <div className="flex gap-2">
               {(['daily', 'monthly', 'fixed'] as GoalMode[]).map(m => (
                 <button
                   key={m}
                   onClick={() => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], mode: m } })}
-                  className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase italic transition-all ${goals[metricKey].mode === m ? 'bg-primary text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900 text-slate-400'}`}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${goals[metricKey].mode === m ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                 >
                   {m === 'daily' ? 'Diário' : m === 'monthly' ? 'Mensal' : 'Fixo'}
                 </button>
@@ -119,6 +146,7 @@ const App: React.FC = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
 
+  // Filters (Synchronized across all tabs)
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(1);
@@ -127,23 +155,51 @@ const App: React.FC = () => {
   const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
-  const [isCampaignDropdownOpen, setIsCampaignDropdownOpen] = useState(false);
-  const campaignRef = useRef<HTMLDivElement>(null);
-
   const [selectedAdSets, setSelectedAdSets] = useState<string[]>([]);
-  const [isAdSetDropdownOpen, setIsAdSetDropdownOpen] = useState(false);
-  const adSetRef = useRef<HTMLDivElement>(null);
-
   const [selectedAds, setSelectedAds] = useState<string[]>([]);
+
+  // Dropdown UI states for Home/Marketing
+  const [isCampaignDropdownOpen, setIsCampaignDropdownOpen] = useState(false);
+  const [isAdSetDropdownOpen, setIsAdSetDropdownOpen] = useState(false);
   const [isAdDropdownOpen, setIsAdDropdownOpen] = useState(false);
+  const campaignRef = useRef<HTMLDivElement>(null);
+  const adSetRef = useRef<HTMLDivElement>(null);
   const adRef = useRef<HTMLDivElement>(null);
+
+  // Dropdown UI states for Sales (using same filter values but different refs/opens)
+  const [isSalesCampaignDropdownOpen, setIsSalesCampaignDropdownOpen] = useState(false);
+  const [isSalesAdSetDropdownOpen, setIsSalesAdSetDropdownOpen] = useState(false);
+  const [isSalesAdDropdownOpen, setIsSalesAdDropdownOpen] = useState(false);
+  const salesCampaignRef = useRef<HTMLDivElement>(null);
+  const salesAdSetRef = useRef<HTMLDivElement>(null);
+  const salesAdRef = useRef<HTMLDivElement>(null);
 
   const [salesSearch, setSalesSearch] = useState('');
   const [selectedStage, setSelectedStage] = useState<string>('all');
 
+  const [retentionSortOrder, setRetentionSortOrder] = useState<'default' | 'highest'>('default');
+  const kanbanRef = useRef<HTMLDivElement>(null);
+
+  const scrollKanban = (direction: 'left' | 'right') => {
+    if (kanbanRef.current) {
+      const scrollAmount = 350;
+      kanbanRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiReport, setAiReport] = useState<string>('');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
   const loadData = async (silent = false) => {
     if (!currentUser) return;
-    const tablesToFetch = [`Marketing_${currentUser.id}`, `Vendas_${currentUser.id}`, `Dados`];
+    // Fix for user 'pedrosa' using specific table
+    const salesTable = currentUser.username.toLowerCase().includes('pedrosa') ? 'Vendas_2' : `Vendas_${currentUser.id}`;
+    const tablesToFetch = [`Marketing_${currentUser.id}`, salesTable, `Dados`];
     if (!silent) setLoading(LoadingState.LOADING);
     const result = await fetchData(tablesToFetch);
     setBaseData(result.data);
@@ -151,6 +207,32 @@ const App: React.FC = () => {
     setLoading(LoadingState.SUCCESS);
     if (result.data.fetchedTables && result.data.fetchedTables.length > 0) {
       setInspectTable(result.data.fetchedTables[0]);
+    }
+
+    // Try to load goals from Meta_2 if user is Pedrosa
+    if (currentUser.username.toLowerCase().includes('pedrosa') || currentUser.id === 2) {
+      try {
+        const { data: remoteGoals, error } = await supabase
+          .from('Meta_2')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (remoteGoals && !error) {
+          setGoals(prev => ({
+            ...prev,
+            amountSpent: { ...prev.amountSpent, value: remoteGoals.Orçamento || 0 },
+            leads: { ...prev.leads, value: remoteGoals.Leads || 0 },
+            cpl: { ...prev.cpl, value: remoteGoals.CPL || 0 },
+            ctr: { ...prev.ctr, value: remoteGoals.CTR || 0 },
+            cpm: { ...prev.cpm, value: remoteGoals.CPM || 0 },
+            frequency: { ...prev.frequency, value: remoteGoals.Frequência || 0 }
+          }));
+        }
+      } catch (err) {
+        console.warn('Silent skip loading goals from supabase');
+      }
     }
   };
 
@@ -170,9 +252,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Overview/Marketing refs
       if (campaignRef.current && !campaignRef.current.contains(event.target as Node)) setIsCampaignDropdownOpen(false);
       if (adSetRef.current && !adSetRef.current.contains(event.target as Node)) setIsAdSetDropdownOpen(false);
       if (adRef.current && !adRef.current.contains(event.target as Node)) setIsAdDropdownOpen(false);
+
+      // Sales refs
+      if (salesCampaignRef.current && !salesCampaignRef.current.contains(event.target as Node)) setIsSalesCampaignDropdownOpen(false);
+      if (salesAdSetRef.current && !salesAdSetRef.current.contains(event.target as Node)) setIsSalesAdSetDropdownOpen(false);
+      if (salesAdRef.current && !salesAdRef.current.contains(event.target as Node)) setIsSalesAdDropdownOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -193,7 +281,7 @@ const App: React.FC = () => {
     return { campaigns, adSets, ads };
   }, [baseData, selectedCampaigns, selectedAdSets]);
 
-  // Efeito para disparar animação de filtragem
+  // Unified effect for filter animation
   useEffect(() => {
     setIsFiltering(true);
     const timer = setTimeout(() => setIsFiltering(false), 300);
@@ -221,9 +309,39 @@ const App: React.FC = () => {
     return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData);
   }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds]);
 
-  const handleSaveGoals = () => {
+  const handleSaveGoals = async () => {
+    // Save to localStorage (existing behavior)
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(goals));
-    alert('Metas salvas com sucesso!');
+
+    // For User 2 (Pedrosa), sync with Supabase Meta_2 table
+    if (currentUser?.username.toLowerCase().includes('pedrosa') || currentUser?.id === 2) {
+      try {
+        const { error } = await supabase
+          .from('Meta_2')
+          .upsert({
+            id: 1, // Assuming a single row for active goals
+            Orçamento: goals.amountSpent.value,
+            Leads: goals.leads.value,
+            CPL: goals.cpl.value,
+            CTR: goals.ctr.value,
+            CPM: goals.cpm.value,
+            Frequência: goals.frequency.value
+          });
+
+
+        if (error) {
+          console.error('Erro ao salvar metas no Supabase:', error);
+          alert('Erro ao sincronizar com o banco de dados, mas salvo localmente.');
+        } else {
+          alert('Metas salvas e sincronizadas com sucesso!');
+        }
+      } catch (err) {
+        console.error('Exception saving goals:', err);
+        alert('Metas salvas localmente.');
+      }
+    } else {
+      alert('Metas salvas com sucesso!');
+    }
   };
 
   const getScaledValue = (metric: { value: number; mode: GoalMode }) => {
@@ -283,10 +401,10 @@ const App: React.FC = () => {
       const adset = getRowValue(row, ADSET_KEYS) || 'N/A';
       const ad = getRowValue(row, AD_KEYS) || 'N/A';
       const key = `${campaign}-${adset}-${ad}`;
-      const leads = parseFloat(getRowValue(row, ["leads", "lead count", "leads_gerados", "results"]) || '0');
-      const spend = parseFloat(getRowValue(row, ["Amount Spent", "investimento", "valor gasto", "spent"]) || '0');
-      const clicks = parseFloat(getRowValue(row, ["Link Clicks", "cliques", "clicks"]) || '0');
-      const impressions = parseFloat(getRowValue(row, ["Impressions", "impressoes"]) || '0');
+      const leads = parseCurrencyValue(getRowValue(row, ["leads", "lead count", "leads_gerados", "results"]));
+      const spend = parseCurrencyValue(getRowValue(row, ["Amount Spent", "investimento", "valor gasto", "spent"]));
+      const clicks = parseCurrencyValue(getRowValue(row, ["Link Clicks", "cliques", "clicks"]));
+      const impressions = parseCurrencyValue(getRowValue(row, ["Impressions", "impressoes"]));
       if (!adStats[key]) { adStats[key] = { campaign, adset, ad, leads: 0, spend: 0, clicks: 0, impressions: 0 }; }
       adStats[key].leads += leads;
       adStats[key].spend += spend;
@@ -295,13 +413,185 @@ const App: React.FC = () => {
     });
     return Object.values(adStats)
       .map(item => ({ ...item, cpl: item.leads > 0 ? item.spend / item.leads : item.spend, ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0 }))
-      .sort((a, b) => { if (b.leads !== a.leads) return b.leads - a.leads; if (a.cpl !== b.cpl) return a.cpl - b.cpl; return b.ctr - a.ctr; });
+      .sort((a, b) => {
+        // Efficiency Score: (Leads * Leads) / Spend
+        // This formula prioritizes ads with HIGH VOLUME and LOW CPL.
+        // It prevents an ad with 1 lead and R$1.00 (Score ~1) from beating an ad with 73 leads and R$750 (Score ~7.1).
+        // It also prevents an ad with 100 leads and R$5000 (Score ~2) from beating the efficient one.
+        const scoreA = a.spend > 0 ? (a.leads * a.leads) / a.spend : 0;
+        const scoreB = b.spend > 0 ? (b.leads * b.leads) / b.spend : 0;
+
+        if (Math.abs(scoreA - scoreB) > 0.01) return scoreB - scoreA;
+        if (b.ctr !== a.ctr) return b.ctr - a.ctr;
+        return b.leads - a.leads;
+      });
   }, [data]);
 
   const orderedStages = useMemo(() => {
     if (!data?.funnelData) return [];
     return data.funnelData.map(f => f.stage);
   }, [data]);
+
+  // Recalculate funnel data with CUMULATIVE counts (leads in advanced stages count in all previous)
+  const correctedFunnelData = useMemo(() => {
+    if (!data?.funnelData || !data?.leadsList) return data?.funnelData || [];
+
+    console.log('📊 Total de leads BRUTO no banco de dados:', data.leadsList.length);
+
+    const uniqueLeads = data.leadsList;
+    console.log('📊 Total de leads sendo usado no funil:', uniqueLeads.length);
+
+    const normalizeStr = (s: string) => s.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\s_]/g, '');
+
+    // Define fixed progression order
+    const STAGE_PROGRESSION = [
+      "Entrada Do Lead",
+      "Qualificado",
+      "Mensagem Inicial",
+      "Tentativa De Contato",
+      "Em Atendimento",
+      "Lead Futuro",
+      "Pre Agendamento",
+      "Reuniao Agendada",
+      "Reuniao Realizada",
+      "Proposta Enviada",
+      "Vendas Concluidas"
+    ];
+
+    // Helper to find stage index in progression
+    const getStageIndex = (stageName: string, stageId?: string): number => {
+      // Explicit ID check: ID 14 is Vendas Concluidas (index 10)
+      if (stageId === "14") return 10;
+      // Explicit ID check: ID 10 is Pre Agendamento (index 6)
+      if (stageId === "10") return 6;
+
+      const normalized = normalizeStr(stageName);
+
+      // Alias check for meetings
+      if (normalized.includes("reuniaomarcada") || (normalized.includes("reuniao") && normalized.includes("marcad"))) {
+        return 7; // Reuniao Agendada
+      }
+
+      return STAGE_PROGRESSION.findIndex(s => {
+        const stageNorm = normalizeStr(s);
+        return normalized === stageNorm ||
+          normalized.includes(stageNorm) ||
+          stageNorm.includes(normalized);
+      });
+    };
+
+    // Get current stage index for each lead
+    const leadsWithIndex = uniqueLeads.map(lead => ({
+      ...lead,
+      stageIndex: getStageIndex(lead.stage, lead.stageId)
+    }));
+
+    // Log unmapped leads
+    const unmappedLeads = leadsWithIndex.filter(l => l.stageIndex === -1);
+    if (unmappedLeads.length > 0) {
+      console.log('⚠️ Leads não mapeados para nenhum estágio:', unmappedLeads.length);
+      console.log('Exemplos:', unmappedLeads.slice(0, 3).map(l => ({ name: l.name, stage: l.stage })));
+    }
+
+    // First pass: Calculate cumulative counts
+    const stagesWithCounts = data.funnelData.map((stage, index) => {
+      const stageIndex = getStageIndex(stage.stage);
+
+      let cumulativeCount: number;
+
+      if (normalizeStr(stage.stage).includes('vendasconcluidas') ||
+        normalizeStr(stage.stage).includes('vendasconcluida') ||
+        normalizeStr(stage.stage).includes('vendaconcluida')) {
+        // Vendas Concluidas: count ONLY leads exactly in this stage (summing quantities)
+        cumulativeCount = leadsWithIndex
+          .filter(lead => lead.stageIndex === stageIndex)
+          .reduce((sum, lead) => sum + (lead.quantity || 1), 0);
+      } else if (stageIndex === 0) {
+        // First stage (Entrada Do Lead): count ALL leads (summing quantities)
+        cumulativeCount = leadsWithIndex.reduce((sum, lead) => sum + (lead.quantity || 1), 0);
+      } else {
+        // All other stages: count leads in this stage OR any subsequent stage (summing quantities)
+        cumulativeCount = leadsWithIndex
+          .filter(lead => lead.stageIndex >= stageIndex && lead.stageIndex !== -1)
+          .reduce((sum, lead) => sum + (lead.quantity || 1), 0);
+      }
+
+      console.log(`Estágio "${stage.stage}": ${cumulativeCount} leads`);
+
+      return {
+        ...stage,
+        count: cumulativeCount
+      };
+    });
+
+    // Second pass: Calculate conversions using the cumulative counts
+    return stagesWithCounts.map((stage, index) => {
+      let conversion = 0;
+      if (index > 0) {
+        const previousStageCount = stagesWithCounts[index - 1].count;
+        if (previousStageCount > 0) {
+          conversion = (stage.count / previousStageCount) * 100;
+          // Cap at 100%
+          conversion = Math.min(conversion, 100);
+        }
+      } else {
+        // First stage always 100%
+        conversion = 100;
+      }
+
+      return {
+        ...stage,
+        conversion: conversion
+      };
+    });
+  }, [data]);
+
+  // Filtered funnel for Overview page - show only specific stages
+  const filteredFunnelForOverview = useMemo(() => {
+    if (!correctedFunnelData) return [];
+
+    const normalizeStr = (s: string) => s.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\s_]/g, '');
+
+    // Stages to show in Overview funnel (in order)
+    const OVERVIEW_STAGES = [
+      "Entrada Do Lead",        // Leads
+      "Mensagem Inicial",       // Mensagem Enviada
+      "Em Atendimento",         // Em Atendimento
+      "Reuniao Agendada",       // Reunião Marcada
+      "Reuniao Realizada",      // Reunião Realizada
+      "Vendas Concluidas"       // Vendas
+    ];
+
+    // Filter and reorder
+    const filtered = OVERVIEW_STAGES
+      .map(targetStage => {
+        return correctedFunnelData.find(stage => {
+          const stageNorm = normalizeStr(stage.stage);
+          const targetNorm = normalizeStr(targetStage);
+          return stageNorm === targetNorm ||
+            stageNorm.includes(targetNorm) ||
+            targetNorm.includes(stageNorm);
+        });
+      })
+      .filter(stage => stage !== undefined);
+
+    // Recalculate conversions for filtered stages
+    return filtered.map((stage, index) => {
+      let conversion = 100;
+      if (index > 0 && filtered[index - 1]) {
+        const prevCount = filtered[index - 1].count;
+        if (prevCount > 0) {
+          conversion = (stage.count / prevCount) * 100;
+          conversion = Math.min(conversion, 100);
+        }
+      }
+      return { ...stage, conversion };
+    });
+  }, [correctedFunnelData]);
 
   const filteredLeads = useMemo(() => {
     if (!data?.leadsList) return [];
@@ -322,25 +612,137 @@ const App: React.FC = () => {
     useEffect(() => { if (!isOpen) setSearchTerm(''); }, [isOpen]);
     const filteredOptions = useMemo(() => !searchTerm ? options : options.filter((opt: string) => opt.toLowerCase().includes(searchTerm.toLowerCase())), [options, searchTerm]);
     return (
-      <div ref={dropdownRef} className="relative flex-1 min-w-[200px] bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-3 cursor-pointer group hover:border-primary/30 transition-all" onClick={() => setIsOpen(!isOpen)}>
-        <div className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-primary group-hover:bg-primary/10 transition-colors"><Icon size={16} /></div>
-        <div className="flex-1 overflow-hidden"><p className="text-[9px] font-black text-slate-400 uppercase italic mb-0.5 tracking-wider">{title}</p><p className="text-xs font-bold text-slate-700 dark:text-white truncate italic">{selected.length === 0 ? `Todos ${title}` : selected.length === 1 ? selected[0] : `${selected.length} Selecionados`}</p></div>
-        <ChevronRight size={16} className={`text-slate-300 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+      <div ref={dropdownRef} className={`relative flex-1 min-w-[200px] bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-3 cursor-pointer group hover:border-blue-400 transition-all ${selected.length > 0 ? 'bg-blue-50/30' : ''}`} onClick={() => setIsOpen(!isOpen)}>
+        <div className={`p-2 rounded-lg transition-all ${selected.length > 0 ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
+          <Icon size={16} />
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{title}</p>
+          <p className={`text-xs font-black truncate ${selected.length > 0 ? 'text-blue-600' : 'text-slate-700 dark:text-white'}`}>
+            {selected.length === 0 ? `Todos` : selected.length === 1 ? selected[0] : `${selected.length} Selecionados`}
+          </p>
+        </div>
+        <ChevronRight size={16} className={`text-slate-300 transition-transform ${isOpen ? 'rotate-90' : ''} ${selected.length > 0 ? 'text-blue-400' : ''}`} />
         {isOpen && (
-          <div className="absolute top-full left-0 mt-2 w-full min-w-[340px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 p-4 max-h-[500px] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="relative mb-4 px-1"><div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Search size={14} /></div><input type="text" autoFocus placeholder={`Pesquisar ${title.toLowerCase()}...`} className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold outline-none dark:text-white italic focus:ring-2 focus:ring-primary/20 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onClick={(e) => e.stopPropagation()} />{searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"><X size={14} /></button>)}</div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1"><button onClick={() => { onToggle("__ALL__"); setIsOpen(false); }} className={`w-full text-left px-4 py-3 rounded-lg text-xs font-bold italic mb-2 transition-all ${selected.length === 0 ? 'bg-primary text-white shadow-md' : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-400'}`}>Todos {title}</button><div className="h-px bg-slate-100 dark:bg-slate-700 my-2"></div><div className="space-y-1">{filteredOptions.map((opt: string) => (<button key={opt} onClick={() => onToggle(opt)} className={`w-full flex items-start justify-between px-4 py-3.5 rounded-lg text-[11px] font-bold italic transition-colors text-left border-b border-slate-50 dark:border-slate-700/50 last:border-none ${selected.includes(opt) ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-300'}`}><span className="whitespace-normal leading-relaxed pr-4 flex-1 break-words">{opt}</span>{selected.includes(opt) && <Check size={14} className="flex-shrink-0 mt-0.5 text-primary" />}</button>))}</div>{filteredOptions.length === 0 && (<div className="px-4 py-10 text-center"><Database size={24} className="mx-auto text-slate-200 mb-3" /><p className="text-[10px] font-bold text-slate-400 italic">{searchTerm ? 'Nenhum resultado encontrado.' : `Nenhuma opção disponível.`}</p></div>)}</div>
+          <div className="absolute top-full left-0 mt-2 w-full min-w-[340px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 p-3 max-h-[500px] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="relative mb-3 px-1"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Search size={14} /></div><input type="text" autoFocus placeholder={`Pesquisar...`} className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none dark:text-white focus:ring-2 focus:ring-primary/20 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onClick={(e) => e.stopPropagation()} />{searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"><X size={14} /></button>)}</div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1"><button onClick={() => { onToggle("__ALL__"); setIsOpen(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium mb-1 transition-all ${selected.length === 0 ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-300'}`}>Todos</button><div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div><div className="space-y-0.5">{filteredOptions.map((opt: string) => (<button key={opt} onClick={() => onToggle(opt)} className={`w-full flex items-start justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${selected.includes(opt) ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400'}`}><span className="whitespace-normal leading-relaxed pr-2 flex-1 break-words">{opt}</span>{selected.includes(opt) && <Check size={14} className="flex-shrink-0 mt-0.5" />}</button>))}</div>{filteredOptions.length === 0 && (<div className="px-4 py-8 text-center"><Database size={20} className="mx-auto text-slate-200 mb-2" /><p className="text-xs text-slate-400">{searchTerm ? 'Nenhum resultado.' : `Vazio.`}</p></div>)}</div>
           </div>
         )}
       </div>
     );
   };
 
+  const consultAI = async () => {
+    setIsGeneratingReport(true);
+    setIsAIModalOpen(true);
+    setAiReport('');
+
+    try {
+      // Collect current tab data
+      const tabData = {
+        tab: activeTab,
+        metrics: data?.metrics,
+        goals: scaledGoals,
+        clientInfo: data?.clientInfo,
+        funnelData: activeTab === 'overview' || activeTab === 'sales' ? data?.funnelData : null,
+        marketingMetrics: activeTab === 'marketing' ? {
+          adRanking: adRankingData.slice(0, 10),
+          creativePlayback: data?.creativePlayback.slice(0, 5)
+        } : null,
+        leadsList: activeTab === 'sales' ? data?.leadsList.slice(0, 20) : null,
+        dateRange: { startDate, endDate }
+      };
+
+      // Create prompt for AI
+      const prompt = `Você é um consultor especialista em marketing digital e análise de dados. Analise os seguintes dados do dashboard e gere um relatório profissional e detalhado para o cliente.
+
+**Aba Atual:** ${activeTab === 'overview' ? 'Visão Geral' : activeTab === 'marketing' ? 'Marketing' : 'Vendas'}
+
+**Período:** ${startDate} até ${endDate}
+
+**Métricas Atuais:**
+${JSON.stringify(tabData.metrics, null, 2)}
+
+**Metas Configuradas:**
+${JSON.stringify(tabData.goals, null, 2)}
+
+**Informações do Cliente:**
+${JSON.stringify(tabData.clientInfo, null, 2)}
+
+${tabData.funnelData ? `**Funil de Vendas:**\n${JSON.stringify(tabData.funnelData, null, 2)}` : ''}
+
+${tabData.marketingMetrics ? `**Top Anúncios:**\n${JSON.stringify(tabData.marketingMetrics.adRanking, null, 2)}` : ''}
+
+${tabData.leadsList ? `**Leads (amostra):**\n${tabData.leadsList.length} leads no total` : ''}
+
+**Instruções:**
+1. Analise o desempenho atual comparando com as metas
+2. Identifique pontos fortes e áreas de melhoria
+3. Forneça recomendações específicas e acionáveis
+4. Use linguagem profissional mas acessível
+5. Organize o relatório em seções claras
+6. Inclua insights sobre ROI, eficiência de campanha e oportunidades
+
+Gere um relatório completo em português do Brasil.`;
+
+      // Call OpenAI API
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY || ''}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: 'Você é um consultor especialista em marketing digital e análise de performance. Gere relatórios profissionais, detalhados e acionáveis.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const report = result.choices[0]?.message?.content || 'Não foi possível gerar o relatório.';
+
+      setAiReport(report);
+    } catch (error: any) {
+      console.error('Error generating AI report:', error);
+      setAiReport(`❌ Erro ao gerar relatório: ${error.message}\n\nVerifique sua conexão com a internet e tente novamente.`);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const copyReportToClipboard = () => {
+    navigator.clipboard.writeText(aiReport);
+    alert('Relatório copiado para a área de transferência!');
+  };
+
+  /* Mobile Menu State */
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6 font-sans">
         <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-2xl p-12 flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
-          <img src={ASSETS.LOGO} alt="Even" className="h-16 mb-6" /><h1 className="text-2xl font-bold text-[#1e293b] mb-1">Even Digital</h1><p className="text-sm text-slate-400 mb-10 font-medium">Performance Marketing Dashboard</p>
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-full border border-amber-200 mb-6 max-w-sm">
+            <AlertCircle size={14} className="text-amber-600 flex-shrink-0" />
+            <p className="text-[10px] font-semibold text-amber-700 text-center leading-tight">Recomendamos o uso em Computador/Desktop para melhor visualização dos gráficos.</p>
+          </div>
+          <img src={ASSETS.LOGO} alt="Even" className="h-16 mb-2" /><h1 className="text-2xl font-bold text-[#1e293b] mb-1">Even Digital</h1><p className="text-sm text-slate-400 mb-10 font-medium">Performance Marketing Dashboard</p>
           <form onSubmit={async (e) => { e.preventDefault(); setLoginError(''); setIsLoggingIn(true); try { const { data: userRows, error } = await supabase.from('Logins Even').select('*').eq('user', loginForm.username).eq('senha', loginForm.password).single(); if (error || !userRows) { setLoginError('Acesso inválido.'); setIsLoggingIn(false); return; } const authUser: UserAuth = { id: userRows.id, username: userRows.user, role: userRows.user === 'admin' ? 'admin' : 'user' }; localStorage.setItem('even_auth', 'true'); localStorage.setItem('even_user', JSON.stringify(authUser)); setCurrentUser(authUser); setIsAuthenticated(true); } catch (err) { setLoginError('Erro de conexão.'); } finally { setIsLoggingIn(false); } }} className="w-full space-y-5"><div className="space-y-2"><label className="text-sm font-semibold text-slate-600 ml-1">Usuário</label><input type="text" placeholder="Digite seu usuário" required className="w-full px-6 py-4 bg-[#333333] border-none rounded-xl text-sm font-medium text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary/50 transition-all" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} /></div><div className="space-y-2"><label className="text-sm font-semibold text-slate-600 ml-1">Senha</label><div className="relative w-full"><input type={showPassword ? "text" : "password"} placeholder="********" required className="w-full px-6 py-4 bg-[#333333] border-none rounded-xl text-sm font-medium text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary/50 transition-all pr-12" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>{loginError && <div className="text-rose-500 text-[11px] font-bold text-center bg-rose-50 py-2 rounded-lg">{loginError}</div>}<button type="submit" disabled={isLoggingIn} className="w-full py-4 mt-4 bg-primary hover:bg-primary-600 text-white rounded-xl font-bold text-base shadow-lg shadow-primary/30 flex items-center justify-center gap-2 transition-all">{isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : "Acessar Dashboard"}</button></form>
         </div>
       </div>
@@ -349,20 +751,90 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen flex bg-slate-50 dark:bg-slate-950 transition-colors duration-500 font-sans ${darkMode ? 'dark' : ''}`}>
-      <aside className="w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-screen fixed z-20">
-        <div className="p-10 border-b border-slate-100 dark:border-slate-800"><div className="flex items-center gap-3"><img src={ASSETS.LOGO} alt="Logo" className="h-8" /><div><h2 className="text-lg font-black text-slate-900 dark:text-white uppercase italic leading-none">Even</h2><span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] block mt-1">RELATÓRIOS</span></div></div></div>
-        <nav className="flex-1 px-6 py-10 space-y-3">{[{ id: 'overview', label: 'Visão Geral', icon: <Grid size={18} /> }, { id: 'metas', label: 'Metas', icon: <Target size={18} /> }, { id: 'marketing', label: 'Marketing', icon: <BarChart3 size={18} /> }, { id: 'sales', label: 'Vendas', icon: <Users size={18} /> }].map(item => (<button key={item.id} onClick={() => setActiveTab(item.id as any)} className={`flex items-center w-full px-6 py-4 rounded-xl font-black uppercase italic text-xs tracking-wider transition-all ${activeTab === item.id ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><span className="mr-4">{item.icon}</span> {item.label}</button>))}</nav>
-        <div className="p-8"><div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-black text-xs">G</div><div><p className="text-[10px] font-black text-slate-800 dark:text-white uppercase italic leading-none">Grupo Pedrosa</p><span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1 block">CLIENTE</span></div></div><button onClick={() => { localStorage.clear(); setIsAuthenticated(false); setCurrentUser(null); }} className="mt-4 w-full py-2.5 bg-slate-900 dark:bg-slate-950 text-white rounded-xl text-[9px] font-black uppercase italic hover:bg-rose-500 transition-all active:scale-95 shadow-lg">Sair do Painel</button></div></div>
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+      )}
+
+      <aside className={`w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-screen fixed z-50 transition-transform duration-300 lg:translate-x-0 sidebar-gradient ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center border border-blue-100 dark:border-blue-800">
+                <img src={ASSETS.LOGO} alt="Logo" className="h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold leading-none text-slate-900 dark:text-white">Even</h2>
+                <span className="text-[10px] text-slate-400 font-medium block mt-1 uppercase tracking-wider">Dashboard</span>
+              </div>
+            </div>
+            <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          </div>
+        </div>
+        <nav className="flex-1 px-4 py-2 space-y-1">
+          {[{ id: 'overview', label: 'Visão Geral', icon: <Grid size={18} />, color: 'primary' },
+          { id: 'metas', label: 'Metas', icon: <Target size={18} />, color: 'purple' },
+          { id: 'marketing', label: 'Marketing', icon: <BarChart3 size={18} />, color: 'blue' },
+          { id: 'sales', label: 'Vendas', icon: <Users size={18} />, color: 'indigo' }
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => { setActiveTab(item.id as any); setIsMobileMenuOpen(false); }}
+              className={`flex items-center w-full px-4 py-3 rounded-xl font-bold text-sm transition-all group ${activeTab === item.id
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                : 'text-slate-500 hover:bg-blue-50 dark:hover:bg-slate-800/50 hover:text-blue-600'
+                }`}
+            >
+              <span className={`mr-3 p-1.5 rounded-lg transition-colors ${activeTab === item.id ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-blue-100'
+                }`}>
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="p-4 mt-auto">
+          <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-lg shadow-blue-500/20">
+                G
+              </div>
+              <div>
+                <p className="text-xs font-black text-slate-900 dark:text-white leading-none">Grupo Pedrosa</p>
+                <span className="text-[10px] text-blue-600 font-bold mt-1 block uppercase tracking-tighter">Cliente Premium</span>
+              </div>
+            </div>
+            <button
+              onClick={() => { localStorage.clear(); setIsAuthenticated(false); setCurrentUser(null); }}
+              className="mt-4 w-full py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:text-white hover:bg-rose-500 hover:border-rose-600 transition-all shadow-sm"
+            >
+              Sair da Conta
+            </button>
+          </div>
+        </div>
       </aside>
 
-      <main className="flex-1 ml-72 p-12 overflow-auto h-screen custom-scrollbar relative">
-        <header className="flex items-center justify-between mb-12">
-          <div><h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">RESUMO DO DASHBOARD</h1><p className="text-slate-500 text-sm font-medium mt-1">Projeto: <span className="text-primary font-bold italic">High Contorno</span></p></div>
+      <main className="flex-1 lg:ml-64 p-4 lg:p-6 overflow-auto h-screen custom-scrollbar relative w-full">
+        <header className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            {currentUser?.role === 'admin' && (
-              <button onClick={() => setIsInspectOpen(true)} className="flex items-center gap-2 px-6 py-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase italic tracking-widest text-primary hover:bg-primary/5 transition-all shadow-sm group"><Database size={16} className="group-hover:rotate-12 transition-transform" /> Inspecionar Dados</button>
+            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-500 lg:hidden hover:bg-slate-100 rounded-lg"><Menu size={24} /></button>
+            <div><h1 className="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1><p className="text-slate-500 text-xs lg:text-sm mt-1">Projeto: <span className="font-semibold text-primary">High Contorno</span></p></div>
+          </div>
+          <div className="flex items-center gap-3">
+            {activeTab !== 'metas' && data && (
+              <button
+                onClick={consultAI}
+                disabled={isGeneratingReport}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg text-xs font-semibold shadow-lg shadow-purple-500/30 transition-all hover:shadow-xl hover:shadow-purple-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles size={16} className={isGeneratingReport ? 'animate-spin' : ''} />
+                <span className="hidden sm:inline">Consultar com IA</span>
+              </button>
             )}
-            <button onClick={() => setDarkMode(!darkMode)} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 shadow-sm transition-all hover:bg-slate-50">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+            {currentUser?.role === 'admin' && (
+              <button onClick={() => setIsInspectOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 hover:text-primary hover:border-primary/30 transition-all shadow-sm group"><Database size={14} /> <span className="hidden sm:inline">Dados</span></button>
+            )}
+            <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 shadow-sm transition-all hover:bg-slate-50">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
           </div>
         </header>
 
@@ -389,60 +861,137 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {isAIModalOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-300">
+            <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={() => !isGeneratingReport && setIsAIModalOpen(false)}></div>
+            <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+              <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl text-white shadow-lg">
+                    <Sparkles size={20} className={isGeneratingReport ? 'animate-spin' : ''} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Relatório de Consultoria com IA</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {isGeneratingReport ? 'Analisando dados e gerando insights...' : 'Análise completa gerada'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAIModalOpen(false)}
+                  disabled={isGeneratingReport}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 transition-colors disabled:opacity-50"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                {isGeneratingReport ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="animate-spin text-primary mb-4" size={48} />
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Consultando IA...</p>
+                    <p className="text-xs text-slate-400">Analisando métricas, metas e performance</p>
+                  </div>
+                ) : aiReport ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                      {aiReport}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <AlertCircle className="text-slate-300 mb-4" size={48} />
+                    <p className="text-sm text-slate-400">Nenhum relatório disponível</p>
+                  </div>
+                )}
+              </div>
+
+              {!isGeneratingReport && aiReport && (
+                <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex items-center justify-between">
+                  <p className="text-xs text-slate-500">
+                    Relatório gerado em {new Date().toLocaleString('pt-BR')}
+                  </p>
+                  <button
+                    onClick={copyReportToClipboard}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-600 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
+                  >
+                    <Copy size={14} />
+                    Copiar Relatório
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'overview' && data && (
-          <div className={`space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className={`space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <KPICard title="VGV Gerenciado" value={FORMATTERS.currency(data.clientInfo.vgv)} meta="FONTE DE DADOS" metaValue="Base Dados" icon={<TrendingUp size={16} />} />
               <KPICard title="Vendas Concluídas" value={FORMATTERS.currency(data.metrics.totalRevenue)} meta="STATUS ATUAL" metaValue="VGV Realizado" icon={<ShoppingBag size={16} />} trend="up" />
               <KPICard title="Aproveitamento VGV" value={FORMATTERS.percent((data.metrics.totalRevenue / (data.clientInfo.vgv || 1)) * 100)} meta="TAXA DE SUCESSO" metaValue="Performance" icon={<Percent size={16} />} trend="up" />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <KPICard title="Investimento em Mídia" value={FORMATTERS.currency(data.metrics.totalSpend)} meta="META MENSAL" metaValue={FORMATTERS.currency(scaledGoals.amountSpent)} icon={<DollarSign size={16} />} statusTag={statusMap.amountSpent} inverseColors={true} />
-              <KPICard title="Total de Leads (CRM)" value={FORMATTERS.number(data.metrics.totalLeads)} meta="META MENSAL" metaValue={FORMATTERS.number(scaledGoals.leads)} icon={<RefreshCw size={16} />} statusTag={statusMap.leads} />
-              <KPICard title="CPL Médio" value={FORMATTERS.currency(data.metrics.cac)} meta="META CPL" metaValue={FORMATTERS.currency(scaledGoals.cpl)} icon={<CplIcon size={16} />} statusTag={statusMap.cpl} />
+              <KPICard title="Total de Leads" value={FORMATTERS.number(data.metrics.marketingMetrics.leads)} meta="META MENSAL" metaValue={FORMATTERS.number(scaledGoals.leads)} icon={<RefreshCw size={16} />} statusTag={statusMap.leads} />
+              <KPICard title="CPL Médio" value={FORMATTERS.currency(data.metrics.marketingMetrics.cpl)} meta="META CPL" metaValue={FORMATTERS.currency(scaledGoals.cpl)} icon={<CplIcon size={16} />} statusTag={statusMap.cpl} />
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center gap-6">
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center gap-3">
               <FilterDropdown title="Campanhas" options={filterOptions.campaigns} selected={selectedCampaigns} onToggle={(camp: any) => toggleFilter(selectedCampaigns, setSelectedCampaigns, camp)} isOpen={isCampaignDropdownOpen} setIsOpen={setIsCampaignDropdownOpen} icon={Layers} dropdownRef={campaignRef} />
+              <FilterDropdown title="Conjuntos" options={filterOptions.adSets} selected={selectedAdSets} onToggle={(i: any) => toggleFilter(selectedAdSets, setSelectedAdSets, i)} isOpen={isAdSetDropdownOpen} setIsOpen={setIsAdSetDropdownOpen} icon={Layout} dropdownRef={adSetRef} />
+              <FilterDropdown title="Anúncios" options={filterOptions.ads} selected={selectedAds} onToggle={(i: any) => toggleFilter(selectedAds, setSelectedAds, i)} isOpen={isAdDropdownOpen} setIsOpen={setIsAdDropdownOpen} icon={Target} dropdownRef={adRef} />
               <div className="h-10 w-px bg-slate-200 dark:bg-slate-700 hidden lg:block"></div>
-              <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl flex-1 min-w-[300px] border border-slate-200 dark:border-slate-800"><Calendar size={18} className="text-primary" /><div className="flex-1 flex gap-4"><div className="flex-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic mb-0.5">Início:</p><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-bold dark:text-white outline-none italic cursor-pointer" /></div><div className="flex-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic mb-0.5">Fim:</p><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-bold dark:text-white outline-none italic cursor-pointer" /></div></div></div>
+              <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-lg flex-1 min-w-[300px] border border-slate-200 dark:border-slate-800"><Calendar size={18} className="text-primary" /><div className="flex-1 flex gap-4"><div className="flex-1"><p className="text-[10px] font-medium text-slate-400 mb-0.5">Início:</p><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-semibold dark:text-white outline-none cursor-pointer" /></div><div className="flex-1"><p className="text-[10px] font-medium text-slate-400 mb-0.5">Fim:</p><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-semibold dark:text-white outline-none cursor-pointer" /></div></div></div>
             </div>
 
-            <div className="grid grid-cols-12 gap-8">
-              <div className="col-span-7 bg-white dark:bg-slate-800 p-10 rounded-[32px] shadow-sm border border-slate-200 dark:border-slate-700"><div className="flex items-center justify-between mb-8 px-4"><div className="flex items-center gap-3"><Filter size={20} className="text-primary" /><h3 className="text-xl font-black text-slate-800 dark:text-white uppercase italic tracking-tighter">Fluxo do Funil de Vendas</h3></div><div className="px-5 py-2 bg-primary/10 rounded-full text-xs font-black text-primary italic">TOTAL: {data?.funnelData?.[0]?.count || 0} LEADS</div></div><FunnelChartComponent data={data.funnelData} /></div>
-              <div className="col-span-5 flex flex-col gap-8"><div className="bg-[#1e293b] dark:bg-slate-900 p-12 rounded-[32px] text-white relative overflow-hidden flex flex-col justify-between shadow-lg min-h-[260px]"><div className="relative z-10"><p className="text-sm font-bold opacity-60 mb-2 uppercase tracking-widest">ROI Estratégico Estimado</p><p className="text-7xl font-black mb-6 tracking-tighter leading-none italic">{data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : 0}x</p><div className="max-w-[240px]"><p className="text-[11px] opacity-40 leading-relaxed font-bold uppercase italic tracking-widest">Multiplicador de retorno baseado no faturamento real identificado no CRM contra o investimento em anúncios.</p></div></div><div className="absolute -right-10 -bottom-10 opacity-5 rotate-12"><TrendingUp size={280} /></div></div><div className="bg-white dark:bg-slate-800 p-10 rounded-[32px] shadow-sm border border-slate-200 dark:border-slate-700"><h4 className="text-xl font-black text-slate-800 dark:text-white uppercase italic tracking-tighter mb-8">Eficiência de Conversão</h4><div className="space-y-8"><div className="flex items-center justify-between"><div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-1">Total Investido</p><p className="text-2xl font-black text-primary italic leading-none">{FORMATTERS.currency(data.metrics.totalSpend)}</p></div><div className="text-right"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-1">Total Vendido</p><p className="text-2xl font-black text-emerald-500 italic leading-none">{FORMATTERS.currency(data.metrics.totalRevenue)}</p></div></div><div className="h-3 w-full bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden flex shadow-inner"><div className="h-full bg-primary" style={{ width: '35%' }}></div><div className="h-full bg-emerald-500" style={{ width: '65%' }}></div></div></div></div></div>
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-7 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700"><div className="flex items-center justify-between mb-5 px-4"><div className="flex items-center gap-3"><Filter size={18} className="text-primary" /><h3 className="text-lg font-semibold text-slate-800 dark:text-white">Fluxo do Funil de Vendas</h3></div><div className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium">Total: {filteredFunnelForOverview?.[0]?.count || 0} Leads</div></div><FunnelChartComponent data={filteredFunnelForOverview} /></div>
+              <div className="col-span-5 flex flex-col gap-3"><div className="bg-primary dark:bg-primary p-8 rounded-xl text-white relative overflow-hidden flex flex-col justify-between shadow-lg min-h-[220px]"><div className="relative z-10"><p className="text-sm font-medium opacity-80 mb-2">ROI Estratégico Estimado</p><p className="text-6xl font-bold mb-4 tracking-tight leading-none">{data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : 0}x</p><div className="max-w-[240px]"><p className="text-xs opacity-60 leading-relaxed font-medium">Multiplicador de retorno baseado no faturamento real identificado no CRM contra o investimento em anúncios.</p></div></div><div className="absolute -right-10 -bottom-10 opacity-10 rotate-12"><TrendingUp size={240} /></div></div><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700"><h4 className="text-lg font-semibold text-slate-800 dark:text-white mb-5">Eficiência de Conversão</h4><div className="space-y-6"><div className="flex items-center justify-between"><div><p className="text-xs font-medium text-slate-500 mb-1">Total Investido</p><p className="text-xl font-semibold text-primary leading-none">{FORMATTERS.currency(data.metrics.totalSpend)}</p></div><div className="text-right"><p className="text-xs font-medium text-slate-500 mb-1">Total Vendido</p><p className="text-xl font-semibold text-emerald-500 leading-none">{FORMATTERS.currency(data.metrics.totalRevenue)}</p></div></div><div className="h-2 w-full bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden flex shadow-inner"><div className="h-full bg-primary" style={{ width: '35%' }}></div><div className="h-full bg-emerald-500" style={{ width: '65%' }}></div></div></div></div></div>
             </div>
           </div>
         )}
 
         {activeTab === 'metas' && (
-          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="bg-white dark:bg-slate-800 p-12 rounded-[40px] border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-12"><div className="flex items-center gap-6"><div className="p-4 bg-primary/10 rounded-2xl text-primary shadow-inner"><Target size={32} /></div><div><h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none mb-2">DEFINIÇÃO DE METAS</h2><p className="text-[11px] text-slate-400 font-bold italic uppercase tracking-[0.2em]">Ajuste os objetivos técnicos do projeto</p></div></div><button onClick={handleSaveGoals} className="px-10 py-5 bg-primary hover:bg-primary-600 text-white rounded-2xl font-black text-xs uppercase italic shadow-lg shadow-primary/30 flex items-center gap-3 transition-all active:scale-95 group"><Save size={20} className="group-hover:scale-110 transition-transform" /> ATUALIZAR METAS</button></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                <GoalInputCard icon={DollarSign} title="1. Quantia Gasta" metricKey="amountSpent" />
-                <GoalInputCard icon={Users} title="2. Leads" metricKey="leads" />
-                <GoalInputCard icon={CplIcon} title="3. Custo por Lead" metricKey="cpl" />
-                <GoalInputCard icon={Percent} title="4. CTR" metricKey="ctr" />
-                <GoalInputCard icon={ReachIcon} title="5. CPM" metricKey="cpm" />
-                <GoalInputCard icon={RefreshCw} title="6. Frequência" metricKey="frequency" />
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 rounded-xl text-primary"><Target size={24} /></div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Configuração de Metas</h2>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">Defina os objetivos de performance para os indicadores</p>
+                  </div>
+                </div>
+                <button onClick={handleSaveGoals} className="px-6 py-2.5 bg-primary hover:bg-primary-600 text-white rounded-lg font-semibold text-xs shadow-sm shadow-primary/20 flex items-center gap-2 transition-all active:scale-95">
+                  <Save size={16} /> Salvar Alterações
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <GoalInputCard icon={DollarSign} title="Orcamento" metricKey="amountSpent" />
+                <GoalInputCard icon={Users} title="Leads" metricKey="leads" />
+                <GoalInputCard icon={CplIcon} title="Custo por Lead (CPL)" metricKey="cpl" />
+                <GoalInputCard icon={Percent} title="CTR" metricKey="ctr" />
+                <GoalInputCard icon={ReachIcon} title="CPM" metricKey="cpm" />
+                <GoalInputCard icon={RefreshCw} title="Frequência" metricKey="frequency" />
               </div>
             </div>
           </div>
         )}
 
         {activeTab === 'marketing' && data && (
-          <div className={`space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap gap-6">
+          <div className={`space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap gap-3">
               <FilterDropdown title="Campanhas" options={filterOptions.campaigns} selected={selectedCampaigns} onToggle={(i: any) => toggleFilter(selectedCampaigns, setSelectedCampaigns, i)} isOpen={isCampaignDropdownOpen} setIsOpen={setIsCampaignDropdownOpen} icon={Layers} dropdownRef={campaignRef} />
               <FilterDropdown title="Conjuntos" options={filterOptions.adSets} selected={selectedAdSets} onToggle={(i: any) => toggleFilter(selectedAdSets, setSelectedAdSets, i)} isOpen={isAdSetDropdownOpen} setIsOpen={setIsAdSetDropdownOpen} icon={Layout} dropdownRef={adSetRef} />
               <FilterDropdown title="Anúncios" options={filterOptions.ads} selected={selectedAds} onToggle={(i: any) => toggleFilter(selectedAds, setSelectedAds, i)} isOpen={isAdDropdownOpen} setIsOpen={setIsAdDropdownOpen} icon={Target} dropdownRef={adRef} />
               <div className="h-10 w-px bg-slate-200 dark:bg-slate-700 hidden lg:block"></div>
-              <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl flex-1 min-w-[300px] border border-slate-200 dark:border-slate-800"><Calendar size={18} className="text-primary" /><div className="flex-1 flex gap-4"><div className="flex-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic mb-0.5">Início:</p><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-bold dark:text-white outline-none italic cursor-pointer" /></div><div className="flex-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic mb-0.5">Fim:</p><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-bold dark:text-white outline-none italic cursor-pointer" /></div></div></div>
+              <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-lg flex-1 min-w-[300px] border border-slate-200 dark:border-slate-800"><Calendar size={18} className="text-primary" /><div className="flex-1 flex gap-4"><div className="flex-1"><p className="text-[10px] font-medium text-slate-400 mb-0.5">Início:</p><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-semibold dark:text-white outline-none cursor-pointer" /></div><div className="flex-1"><p className="text-[10px] font-medium text-slate-400 mb-0.5">Fim:</p><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-transparent border-none text-xs font-semibold dark:text-white outline-none cursor-pointer" /></div></div></div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-[32px] border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-700">
-              <div className="grid grid-cols-5 divide-x divide-slate-100 dark:divide-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-800/50">
+              <div className="grid grid-cols-5 divide-x divide-slate-100 dark:divide-slate-800/50">
                 {[
                   { title: "Investimento", val: FORMATTERS.currency(data.metrics.totalSpend), icon: <DollarSign size={14} />, meta: FORMATTERS.currency(scaledGoals.amountSpent), status: statusMap.amountSpent },
                   { title: "Alcance", val: FORMATTERS.number(data.metrics.marketingMetrics.reach), icon: <ReachIcon size={14} />, meta: "Único" },
@@ -450,150 +999,97 @@ const App: React.FC = () => {
                   { title: "Frequência", val: data.metrics.marketingMetrics.frequency.toFixed(2), icon: <RefreshCw size={14} />, meta: scaledGoals.frequency.toFixed(1), status: statusMap.frequency },
                   { title: "CPM", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpm), icon: <Percent size={14} />, meta: FORMATTERS.currency(scaledGoals.cpm), status: statusMap.cpm }
                 ].map((kpi, idx) => (
-                  <div key={idx} className="px-8 py-6 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div key={idx} className="px-6 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <div className="text-primary opacity-60 group-hover:opacity-100 transition-opacity">{kpi.icon}</div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">{kpi.title}</span>
+                      <span className="text-xs font-medium text-slate-500 cursor-default">{kpi.title}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-black text-slate-800 dark:text-white italic tracking-tighter leading-none">{kpi.val}</span>
+                      <span className="text-lg font-semibold text-slate-800 dark:text-white leading-none">{kpi.val}</span>
                       {kpi.status && <StatusBadge status={kpi.status} />}
                     </div>
-                    <div className="mt-2 text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase italic">Meta: {kpi.meta}</div>
+                    <div className="mt-1.5 text-[10px] text-slate-400">Meta: {kpi.meta}</div>
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-5 divide-x divide-slate-100 dark:divide-slate-700">
+              <div className="grid grid-cols-5 divide-x divide-slate-100 dark:divide-slate-800/50">
                 {[
                   { title: "Cliques", val: FORMATTERS.number(data.metrics.marketingMetrics.clicks), icon: <MousePointer2 size={14} />, meta: "Cliques no Link" },
                   { title: "CPC", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpc), icon: <DollarSign size={14} />, meta: "Custo Médio" },
                   { title: "CTR", val: FORMATTERS.percent(data.metrics.marketingMetrics.ctr), icon: <Percent size={14} />, meta: FORMATTERS.percent(scaledGoals.ctr), status: statusMap.ctr },
-                  { title: "Leads (Plataforma)", val: FORMATTERS.number(data.metrics.marketingMetrics.cpl > 0 ? data.metrics.totalSpend / data.metrics.marketingMetrics.cpl : 0), icon: <Users size={14} />, meta: "Atribuídos" },
+                  { title: "Leads (Plataforma)", val: FORMATTERS.number(data.metrics.marketingMetrics.leads), icon: <Users size={14} />, meta: FORMATTERS.number(scaledGoals.leads), status: statusMap.leads }, // Updated to use direct leads metric
                   { title: "CPL", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpl), icon: <CplIcon size={14} />, meta: FORMATTERS.currency(scaledGoals.cpl), status: statusMap.cpl }
                 ].map((kpi, idx) => (
-                  <div key={idx} className="px-8 py-6 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div key={idx} className="px-6 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
+                    <div className="flex items-center gap-2 mb-1.5">
                       <div className="text-primary opacity-60 group-hover:opacity-100 transition-opacity">{kpi.icon}</div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">{kpi.title}</span>
+                      <span className="text-xs font-medium text-slate-500 cursor-default">{kpi.title}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-black text-slate-800 dark:text-white italic tracking-tighter leading-none">{kpi.val}</span>
+                      <span className="text-lg font-semibold text-slate-800 dark:text-white leading-none">{kpi.val}</span>
                       {kpi.status && <StatusBadge status={kpi.status} />}
                     </div>
-                    <div className="mt-2 text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase italic">Meta: {kpi.meta}</div>
+                    <div className="mt-1.5 text-[10px] text-slate-400">Meta: {kpi.meta}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-12 rounded-[40px] border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
+            <MarketingEvolutionChart data={(() => {
+              if (!data?.rawDataByTable) return [];
+              const key = Object.keys(data.rawDataByTable).find(k => k.toLowerCase().includes('marketing'));
+              return key ? data.rawDataByTable[key] : [];
+            })()} />
+
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 p-10 opacity-[0.03] rotate-12"><VerticalBarIcon size={300} /></div>
 
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-16 relative z-10">
-                <div className="flex items-center gap-6">
-                  <div className="p-4 bg-primary/10 rounded-2xl text-primary shadow-inner"><Video size={36} /></div>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 rounded-xl text-primary shadow-sm"><Video size={24} /></div>
                   <div>
-                    <h3 className="text-3xl font-black text-slate-800 dark:text-white uppercase italic tracking-tighter leading-none mb-2">Monitor de Retenção de Vídeo</h3>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] italic">Análise técnica de queda de audiência por marcos de visualização</p>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-white leading-tight">Monitor de Retenção de Vídeo</h3>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">Análise técnica de queda de audiência por marcos de visualização</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-inner">
-                  {['3s', '25%', '50%', '75%', '100%'].map((m, i) => (
-                    <div key={i} className="flex flex-col items-center gap-1.5 px-3 border-r last:border-none border-slate-200 dark:border-slate-800">
-                      <div className={`w-6 h-1.5 rounded-full ${i === 0 ? 'bg-primary/20' : i === 4 ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-primary/50'}`}></div>
-                      <span className="text-[8px] font-black text-slate-400 uppercase">{m}</span>
-                    </div>
-                  ))}
+                <div className="relative">
+                  <select
+                    className="px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold uppercase tracking-wide outline-none dark:text-white cursor-pointer appearance-none shadow-sm pr-10"
+                    value={retentionSortOrder}
+                    onChange={(e) => setRetentionSortOrder(e.target.value as 'default' | 'highest')}
+                  >
+                    <option value="default">Padrão</option>
+                    <option value="highest">Maior Retenção</option>
+                  </select>
+                  <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 text-primary pointer-events-none" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10 relative z-10">
-                {data.creativePlayback.length > 0 ? data.creativePlayback.slice(0, 9).map((creative, index) => {
-                  const maxVal = creative.views3s || 1;
-                  const milestones = [
-                    { label: '3s', value: creative.views3s, percent: 100 },
-                    { label: '25%', value: creative.p25, percent: (creative.p25 / maxVal) * 100 },
-                    { label: '50%', value: creative.p50, percent: (creative.p50 / maxVal) * 100 },
-                    { label: '75%', value: creative.p75, percent: (creative.p75 / maxVal) * 100 },
-                    { label: '100%', value: creative.p100, percent: (creative.p100 / maxVal) * 100 }
-                  ];
-
-                  return (
-                    <div key={index} className="bg-slate-50 dark:bg-slate-900/40 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 flex flex-col hover:bg-white dark:hover:bg-slate-900 hover:shadow-lg transition-all group min-h-[420px]">
-                      <div className="flex items-start justify-between mb-10">
-                        <div className="max-w-[70%]">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center text-xs font-black italic shadow-lg">#{index + 1}</span>
-                            <h4 className="text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase italic leading-tight group-hover:text-primary transition-colors line-clamp-1">{creative.adName}</h4>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">{FORMATTERS.number(creative.views3s)} visualizações totais</p>
-                            {creative.date && (
-                              <div className="flex items-center gap-1.5 mt-1.5 opacity-60">
-                                <Calendar size={10} className="text-primary" />
-                                <p className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase italic tracking-tighter">Ativo em: {creative.date}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[9px] font-black text-primary uppercase italic tracking-widest">Retenção Final</span>
-                          <p className="text-3xl font-black text-primary italic leading-none">{creative.retentionRate.toFixed(1)}%</p>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 flex items-end justify-between h-44 gap-3 px-2 mb-6 relative">
-                        <div className="absolute inset-x-0 top-0 h-full flex flex-col justify-between pointer-events-none opacity-5">
-                          {[...Array(5)].map((_, i) => <div key={i} className="w-full h-px bg-slate-400"></div>)}
-                        </div>
-                        {milestones.map((m, mIdx) => (
-                          <div key={mIdx} className="flex-1 flex flex-col items-center justify-end h-full relative group/bar">
-                            <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-12 bg-slate-900 text-white text-[10px] px-3 py-1.5 rounded-xl font-black shadow-2xl z-30 transition-all scale-75 group-hover/bar:scale-100 whitespace-nowrap">
-                              {FORMATTERS.number(m.value)}
-                            </div>
-                            <div
-                              className={`w-full rounded-t-xl transition-all duration-1000 ease-out shadow-sm ${mIdx === 0 ? 'bg-primary/10' : mIdx === milestones.length - 1 ? 'bg-primary' : 'bg-primary/50'}`}
-                              style={{ height: `${Math.max(m.percent, 8)}%` }}
-                            />
-                            <span className="mt-4 text-[9px] font-black text-slate-400 uppercase italic tracking-tighter">{m.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Activity size={14} className="text-emerald-500 animate-pulse" />
-                          <span className="text-[10px] font-black text-slate-400 uppercase italic tracking-widest">Concluíram o vídeo</span>
-                        </div>
-                        <span className="text-sm font-black text-slate-800 dark:text-white italic">{FORMATTERS.number(creative.p100)}</span>
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <div className="col-span-full py-40 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[40px]">
-                    <Video size={64} className="mx-auto text-slate-200 mb-8" />
-                    <p className="text-slate-400 font-black italic uppercase text-lg tracking-widest">Aguardando dados para compilação visual</p>
-                  </div>
-                )}
+              <div className="relative z-10 w-full">
+                <VideoRetentionChart data={retentionSortOrder === 'highest'
+                  ? [...data.creativePlayback].sort((a, b) => b.retentionRate - a.retentionRate)
+                  : data.creativePlayback
+                } />
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-12 rounded-[40px] border border-slate-200 dark:border-slate-700 shadow-sm mt-8">
-              <div className="flex items-center justify-between mb-12 px-4">
-                <div className="flex items-center gap-6">
-                  <div className="p-4 bg-primary/10 rounded-2xl text-primary"><Award size={32} /></div>
-                  <div><h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase italic tracking-tighter leading-none mb-1">Ranking de Performance por Criativo</h3><p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">Análise Qualitativa: Leads &gt; CPL &gt; CTR</p></div>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm mt-4">
+              <div className="flex items-center justify-between mb-8 px-2">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 rounded-xl text-primary"><Award size={24} /></div>
+                  <div><h3 className="text-lg font-bold text-slate-800 dark:text-white leading-tight">Ranking de Performance</h3><p className="text-xs font-medium text-slate-400">Análise Qualitativa: Leads &gt; CPL &gt; CTR</p></div>
                 </div>
               </div>
               <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-left border-separate border-spacing-0">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-900/50">
-                      <th className="py-6 px-10 rounded-tl-3xl text-[10px] font-black text-slate-400 uppercase italic tracking-widest border-b border-slate-200 dark:border-slate-800">Origem & Peça Publicitária</th>
-                      <th className="py-6 px-6 text-[10px] font-black text-slate-400 uppercase italic tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">Leads</th>
-                      <th className="py-6 px-6 text-[10px] font-black text-slate-400 uppercase italic tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">Investimento</th>
-                      <th className="py-6 px-6 text-[10px] font-black text-slate-400 uppercase italic tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">CPL</th>
-                      <th className="py-6 px-6 text-[10px] font-black text-slate-400 uppercase italic tracking-widest border-b border-slate-200 dark:border-slate-800 text-center">CTR</th>
-                      <th className="py-6 px-10 rounded-tr-3xl text-[10px] font-black text-slate-400 uppercase italic tracking-widest border-b border-slate-200 dark:border-slate-800 text-right">Performance</th>
+                      <th className="py-4 px-6 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Origem & Peça Publicitária</th>
+                      <th className="py-4 px-4 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Leads</th>
+                      <th className="py-4 px-4 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Investimento</th>
+                      <th className="py-4 px-4 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">CPL</th>
+                      <th className="py-4 px-4 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">CTR</th>
+                      <th className="py-4 px-6 text-right text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Performance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -603,18 +1099,47 @@ const App: React.FC = () => {
                       const isTopWinner = index === 0 && item.leads > 0;
                       return (
                         <tr key={index} className="group hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-all border-b border-slate-100 dark:border-slate-800/50 last:border-none">
-                          <td className="py-6 px-10">
-                            <p className="text-[10px] font-black text-primary uppercase italic truncate max-w-[220px] mb-1">{item.campaign}</p>
-                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 italic line-clamp-1">{item.ad}</p>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[180px]">{item.ad}</p>
+
+                              {/* Campaign Icon with Tooltip */}
+                              <div className="relative group/campaign-table">
+                                <button
+                                  className="p-1 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors cursor-help"
+                                  title={item.campaign}
+                                >
+                                  <Layers size={12} className="text-blue-500" />
+                                </button>
+                                <div className="absolute left-0 top-full mt-1 px-2.5 py-1.5 bg-slate-900 text-white text-[9px] font-medium rounded-lg shadow-lg opacity-0 invisible group-hover/campaign-table:opacity-100 group-hover/campaign-table:visible transition-all z-10 whitespace-nowrap">
+                                  <div className="text-[7px] text-slate-400 uppercase tracking-wide mb-0.5">Campanha</div>
+                                  {item.campaign}
+                                </div>
+                              </div>
+
+                              {/* Ad Set Icon with Tooltip */}
+                              <div className="relative group/adset-table">
+                                <button
+                                  className="p-1 rounded bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors cursor-help"
+                                  title={item.adset}
+                                >
+                                  <Layout size={12} className="text-purple-500" />
+                                </button>
+                                <div className="absolute left-0 top-full mt-1 px-2.5 py-1.5 bg-slate-900 text-white text-[9px] font-medium rounded-lg shadow-lg opacity-0 invisible group-hover/adset-table:opacity-100 group-hover/adset-table:visible transition-all z-10 whitespace-nowrap">
+                                  <div className="text-[7px] text-slate-400 uppercase tracking-wide mb-0.5">Conjunto</div>
+                                  {item.adset}
+                                </div>
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-6 px-6 text-center"><span className="text-base font-black text-slate-900 dark:text-white italic">{FORMATTERS.number(item.leads)}</span></td>
-                          <td className="py-6 px-6 text-center"><span className="text-xs font-bold text-slate-500">{FORMATTERS.currency(item.spend)}</span></td>
-                          <td className="py-6 px-6 text-center"><div className="flex flex-col items-center gap-1.5"><span className={`text-xs font-black italic ${item.cpl <= scaledGoals.cpl ? 'text-emerald-500' : 'text-slate-500'}`}>{FORMATTERS.currency(item.cpl)}</span><StatusBadge status={cplStatus} /></div></td>
-                          <td className="py-6 px-6 text-center"><div className="flex flex-col items-center gap-1.5"><span className="text-xs font-bold text-slate-600 dark:text-slate-300">{FORMATTERS.percent(item.ctr)}</span><StatusBadge status={ctrStatus} /></div></td>
-                          <td className="py-6 px-10 text-right">{isTopWinner ? (<div className="inline-flex items-center gap-2 bg-emerald-500 px-5 py-2.5 rounded-2xl shadow-lg shadow-emerald-500/20"><Trophy size={16} className="text-white" /><span className="text-[10px] font-black text-white uppercase italic tracking-widest">CAMPEÃO</span></div>) : index < 3 && item.leads > 0 ? (<div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-xl"><Star size={14} className="text-primary fill-primary" /><span className="text-[9px] font-black text-primary uppercase italic">TOP {index + 1}</span></div>) : (<div className="inline-flex px-3 py-1 rounded-xl text-[9px] font-black uppercase italic text-slate-400 border border-slate-200 dark:border-slate-700">NORMAL</div>)}</td>
+                          <td className="py-4 px-4 text-center"><span className="text-sm font-semibold text-slate-900 dark:text-white">{FORMATTERS.number(item.leads)}</span></td>
+                          <td className="py-4 px-4 text-center"><span className="text-xs font-medium text-slate-500">{FORMATTERS.currency(item.spend)}</span></td>
+                          <td className="py-4 px-4 text-center"><div className="flex flex-col items-center gap-1"><span className={`text-xs font-semibold ${item.cpl <= scaledGoals.cpl ? 'text-emerald-500' : 'text-slate-500'}`}>{FORMATTERS.currency(item.cpl)}</span><StatusBadge status={cplStatus} /></div></td>
+                          <td className="py-4 px-4 text-center"><div className="flex flex-col items-center gap-1"><span className="text-xs font-medium text-slate-600 dark:text-slate-300">{FORMATTERS.percent(item.ctr)}</span><StatusBadge status={ctrStatus} /></div></td>
+                          <td className="py-4 px-6 text-right">{isTopWinner ? (<div className="inline-flex items-center gap-1.5 bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm"><Trophy size={14} className="text-white" /><span className="text-[9px] font-bold text-white uppercase tracking-wider">Líder</span></div>) : index < 3 && item.leads > 0 ? (<div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg"><Star size={14} className="fill-blue-600" /><span className="text-[9px] font-bold uppercase">Top {index + 1}</span></div>) : (<span className="text-[10px] text-slate-400 font-medium">Standard</span>)}</td>
                         </tr>
                       );
-                    }) : (<tr><td colSpan={6} className="py-40 text-center"><Database size={48} className="mx-auto text-slate-200 mb-6" /><p className="text-xs font-black text-slate-400 uppercase italic tracking-widest opacity-60">Aguardando dados para gerar o ranking</p></td></tr>)}
+                    }) : (<tr><td colSpan={6} className="py-20 text-center"><Database size={32} className="mx-auto text-slate-200 mb-4" /><p className="text-xs font-medium text-slate-400">Aguardando dados</p></td></tr>)}
                   </tbody>
                 </table>
               </div>
@@ -622,10 +1147,353 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'sales' && (
-          <div className={`space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
-            <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-8 shadow-sm"><div className="relative flex-1"><Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Buscar cliente por nome ou dado..." className="w-full pl-16 pr-8 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none dark:text-white transition-all focus:ring-2 focus:ring-primary/20 shadow-inner italic" value={salesSearch} onChange={(e) => setSalesSearch(e.target.value)} /></div><div className="relative min-w-[340px]"><select className="w-full px-10 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-[12px] font-black uppercase italic tracking-widest outline-none dark:text-white cursor-pointer appearance-none shadow-sm" value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)}><option value="all">Todas as Etapas</option>{orderedStages.map(s => <option key={s} value={s}>{s}</option>)}</select><ChevronRight size={20} className="absolute right-8 top-1/2 -translate-y-1/2 rotate-90 text-primary pointer-events-none" /></div></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{filteredLeads.length > 0 ? filteredLeads.map((lead) => (<div key={lead.id} className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col hover:shadow-lg hover:-translate-y-2 transition-all group cursor-pointer shadow-sm relative overflow-hidden">{lead.stage.toLowerCase().includes('concluid') && (<div className="absolute top-0 right-0 p-4 bg-emerald-500 text-white rounded-bl-3xl shadow-lg"><ShoppingBag size={16} /></div>)}<div className="flex items-center gap-5 mb-6"><div className="w-16 h-16 rounded-2xl bg-primary/5 text-primary flex items-center justify-center font-black group-hover:bg-primary group-hover:text-white transition-all italic text-2xl shadow-inner">{lead.name.charAt(0).toUpperCase()}</div><div><h4 className="font-black text-slate-800 dark:text-white italic text-lg leading-tight group-hover:text-primary transition-colors">{lead.name}</h4><p className="text-[11px] font-bold text-slate-400 uppercase italic mt-2 tracking-widest">{lead.stage}</p></div></div><div className="space-y-3 pt-6 border-t border-slate-100 dark:border-slate-800"><div className="flex items-center gap-4 text-[11px] font-bold text-slate-500"><Mail size={14} className="text-primary" /> <span className="truncate">{lead.email}</span></div><div className="flex items-center gap-4 text-[11px] font-bold text-slate-500"><Phone size={14} className="text-emerald-500" /> {lead.phone}</div></div></div>)) : (<div className="col-span-full py-40 text-center bg-white dark:bg-slate-800 rounded-[40px] border-2 border-dashed border-slate-200 dark:border-slate-800 shadow-sm"><Database size={64} className="mx-auto text-slate-200 mb-8" /><p className="text-slate-400 font-black italic uppercase text-lg tracking-widest">Nenhum registro encontrado</p></div>)}</div>
+        {activeTab === 'sales' && data && (
+          <div className={`space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
+            {/* Sales Performance KPI Cards - FIRST ROW */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <KPICard
+                title="Quantidade"
+                value={FORMATTERS.number(data.metrics.totalUnitsSold)}
+                meta="VENDAS CONCLUÍDAS"
+                metaValue="Total de Unidades"
+                icon={<ShoppingBag size={16} />}
+                trend="up"
+              />
+
+              <KPICard
+                title="Faturamento"
+                value={FORMATTERS.currency(data.metrics.totalRevenue)}
+                meta="RECEITA TOTAL"
+                metaValue="Vendas Realizadas"
+                icon={<DollarSign size={16} />}
+                trend="up"
+              />
+
+              <KPICard
+                title="Ticket Médio"
+                value={FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
+                meta="VALOR MÉDIO"
+                metaValue="Por Venda"
+                icon={<TrendingUp size={16} />}
+              />
+
+              <KPICard
+                title="ROI"
+                value={`${data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x`}
+                meta="RETORNO SOBRE INVESTIMENTO"
+                metaValue="Multiplicador"
+                icon={<Percent size={16} />}
+                trend="up"
+              />
+
+              <KPICard
+                title="% para Meta"
+                value={`${scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%`}
+                meta="PROGRESSO"
+                metaValue={`Meta: ${FORMATTERS.number(scaledGoals.leads)} leads`}
+                icon={<Target size={16} />}
+                statusTag={statusMap.leads}
+              />
+            </div>
+
+            {/* Conversion Metrics KPI Cards - SECOND ROW */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              {(() => {
+                const totalLeadsCount = data.leadsList.length || 1;
+                const getCumulativePercent = (stageName: string) => {
+                  const stage = correctedFunnelData.find(s => {
+                    const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+                    const tNorm = stageName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+                    return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+                  });
+                  return stage ? ((stage.count / totalLeadsCount) * 100).toFixed(2) : '0.00';
+                };
+
+                return (
+                  <>
+                    <KPICard
+                      title="Mensagens Enviadas"
+                      value={`${getCumulativePercent('mensagem inicial')}%`}
+                      meta="TAXA DE CONTATO"
+                      metaValue="Leads Contatados"
+                      icon={<Mail size={16} />}
+                    />
+
+                    <KPICard
+                      title="Atendimento"
+                      value={`${getCumulativePercent('em atendimento')}%`}
+                      meta="EM ATENDIMENTO"
+                      metaValue="Qualificação"
+                      icon={<Users size={16} />}
+                    />
+
+                    <KPICard
+                      title="Reuniões Marcadas"
+                      value={`${getCumulativePercent('reuniao agendada')}%`}
+                      meta="AGENDAMENTOS"
+                      metaValue="Taxa de Conversão"
+                      icon={<Calendar size={16} />}
+                    />
+
+                    <KPICard
+                      title="Reuniões Realizadas"
+                      value={`${getCumulativePercent('reuniao realizada')}%`}
+                      meta="CONCLUÍDAS"
+                      metaValue="Efetividade"
+                      icon={<Check size={16} />}
+                    />
+
+                    <KPICard
+                      title="Vendas"
+                      value={`${getCumulativePercent('vendas concluidas')}%`}
+                      meta="CONVERSÃO FINAL"
+                      metaValue="Taxa de Fechamento"
+                      icon={<Trophy size={16} />}
+                      trend="up"
+                    />
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Search and Filters Bar */}
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+                <FilterDropdown title="Campanhas" options={filterOptions.campaigns} selected={selectedCampaigns} onToggle={(i: any) => toggleFilter(selectedCampaigns, setSelectedCampaigns, i)} isOpen={isSalesCampaignDropdownOpen} setIsOpen={setIsSalesCampaignDropdownOpen} icon={Layers} dropdownRef={salesCampaignRef} />
+                <FilterDropdown title="Conjuntos" options={filterOptions.adSets} selected={selectedAdSets} onToggle={(i: any) => toggleFilter(selectedAdSets, setSelectedAdSets, i)} isOpen={isSalesAdSetDropdownOpen} setIsOpen={setIsSalesAdSetDropdownOpen} icon={Layout} dropdownRef={salesAdSetRef} />
+                <FilterDropdown title="Anúncios" options={filterOptions.ads} selected={selectedAds} onToggle={(i: any) => toggleFilter(selectedAds, setSelectedAds, i)} isOpen={isSalesAdDropdownOpen} setIsOpen={setIsSalesAdDropdownOpen} icon={Target} dropdownRef={salesAdRef} />
+              </div>
+
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+                {/* Search Bar */}
+                <div className="relative flex-1">
+                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, email ou telefone..."
+                    value={salesSearch}
+                    onChange={(e) => setSalesSearch(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                  />
+                </div>
+
+                {/* Date Filters */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary/30 transition-all">
+                    <Calendar size={14} className="text-primary flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400 font-medium mb-0.5">Início:</span>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="text-xs font-semibold text-slate-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary/30 transition-all">
+                    <Calendar size={14} className="text-primary flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400 font-medium mb-0.5">Fim:</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="text-xs font-semibold text-slate-700 dark:text-white bg-transparent border-none outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                      {filteredLeads.length} Leads
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Kanban Board */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 relative group">
+              {/* Scroll Controls */}
+              <button
+                onClick={() => scrollKanban('left')}
+                className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 dark:bg-slate-800/90 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 z-20 opacity-0 group-hover:opacity-100 transition-all hover:bg-primary hover:text-white"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button
+                onClick={() => scrollKanban('right')}
+                className="absolute right-6 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 dark:bg-slate-800/90 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 z-20 opacity-0 group-hover:opacity-100 transition-all hover:bg-primary hover:text-white"
+              >
+                <ChevronRight size={20} />
+              </button>
+
+              <div ref={kanbanRef} className="overflow-x-auto custom-scrollbar pb-4 scroll-smooth">
+                <div className="flex gap-4 min-w-max">
+                  {data?.funnelData?.map((stage, index) => {
+                    // Normalize function for matching
+                    const normalizeStr = (s: string) => s.toLowerCase()
+                      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                      .replace(/[\s_]/g, '');
+
+                    // Get ALL leads for this stage (not filtered) - using normalized matching
+                    const allStageLeads = (data?.leadsList || []).filter(lead => {
+                      const leadStageNorm = normalizeStr(lead.stage);
+                      const stageNorm = normalizeStr(stage.stage);
+                      // Check if the normalized strings match or if one contains the other
+                      return leadStageNorm === stageNorm ||
+                        leadStageNorm.includes(stageNorm) ||
+                        stageNorm.includes(leadStageNorm);
+                    });
+
+                    // Apply search filter only for display
+                    const stageLeads = salesSearch
+                      ? allStageLeads.filter(lead =>
+                        lead.name.toLowerCase().includes(salesSearch.toLowerCase()) ||
+                        lead.email.toLowerCase().includes(salesSearch.toLowerCase()) ||
+                        lead.phone.toLowerCase().includes(salesSearch.toLowerCase())
+                      )
+                      : allStageLeads;
+                    const percentage = data.funnelData[0]?.count ? ((stage.count / data.funnelData[0].count) * 100).toFixed(1) : '0';
+
+                    return (
+                      <div
+                        key={stage.stage}
+                        className="flex-shrink-0 w-[280px] bg-gradient-to-b from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col"
+                        style={{ maxHeight: 'calc(100vh - 260px)' }}
+                      >
+                        {/* Column Header */}
+                        <div
+                          className="p-4 border-b-3 sticky top-0 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-t-xl z-10 shadow-sm"
+                          style={{
+                            borderBottomColor: stage.color,
+                            borderBottomWidth: '3px'
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-md"
+                                style={{
+                                  backgroundColor: stage.color,
+                                  boxShadow: `0 4px 12px ${stage.color}40`
+                                }}
+                              >
+                                {allStageLeads.length}
+                              </div>
+                              <h4 className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                                {stage.stage}
+                              </h4>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                              R$ {stage.value ? stage.value.toLocaleString('pt-BR') : '0'}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-medium">
+                              {percentage}%
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Column Content - Scrollable */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+                          {stageLeads.length > 0 ? stageLeads.map((lead) => (
+                            <div
+                              key={lead.id}
+                              className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
+                            >
+                              <div className="space-y-2">
+                                {/* Lead Name */}
+                                <div className="flex items-start gap-2">
+                                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-md flex-shrink-0">
+                                    {lead.businessTitle && lead.businessTitle !== '---' ? lead.businessTitle.charAt(0).toUpperCase() : lead.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className="font-bold text-slate-800 dark:text-white text-xs leading-tight truncate group-hover:text-primary transition-colors">
+                                      {lead.businessTitle && lead.businessTitle !== '---' ? lead.businessTitle : lead.name}
+                                    </h5>
+                                    {lead.stage.toLowerCase().includes('concluid') && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                        <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wide">Vendido</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Lead Info */}
+                                <div className="space-y-1 text-[10px] pl-10">
+                                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                                    <Mail size={10} className="text-primary flex-shrink-0" />
+                                    <span className="truncate">{lead.email}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                                    <Phone size={10} className="text-emerald-500 flex-shrink-0" />
+                                    <span className="truncate">{lead.phone}</span>
+                                  </div>
+                                </div>
+
+                                {/* Tags */}
+                                {lead.tags && lead.tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {lead.tags.map((tag, tagIndex) => {
+                                      // Determine color based on tag content
+                                      const tagLower = tag.toLowerCase().trim();
+                                      let colorClass = '';
+
+                                      if (tagLower.includes('frio')) {
+                                        // Lead Frio - Azul
+                                        colorClass = 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700';
+                                      } else if (tagLower.includes('morno')) {
+                                        // Lead Morno - Amarelo
+                                        colorClass = 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700';
+                                      } else if (tagLower.includes('quente')) {
+                                        // Lead Quente - Vermelho
+                                        colorClass = 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700';
+                                      } else {
+                                        // Default colors for other tags
+                                        const defaultColors = [
+                                          'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800',
+                                          'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800',
+                                          'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800',
+                                          'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800',
+                                          'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800'
+                                        ];
+                                        colorClass = defaultColors[tagIndex % defaultColors.length];
+                                      }
+
+                                      return (
+                                        <span
+                                          key={tagIndex}
+                                          className={`px-2 py-0.5 rounded-full text-[8px] font-bold border ${colorClass} uppercase tracking-wide`}
+                                        >
+                                          {tag}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )) : (
+                            <div className="py-16 text-center">
+                              <Database size={32} className="mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+                              <p className="text-xs text-slate-400 font-medium">
+                                {salesSearch ? 'Nenhum resultado' : 'Vazio'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>

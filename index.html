@@ -17,17 +17,29 @@
           },
           colors: {
             primary: {
-              DEFAULT: '#5992db',
-              50: '#f0f5fc',
-              100: '#dee9f8',
-              200: '#c5d9f3',
-              300: '#9ec1ec',
-              400: '#72a4e3',
-              500: '#5992db', // Brand Color
-              600: '#3e76c8',
-              700: '#325fa6',
-              800: '#2e4f88',
-              900: '#2a436d',
+              DEFAULT: '#3B82F6',
+              50: '#EFF6FF',
+              100: '#DBEAFE',
+              200: '#BFDBFE',
+              300: '#93C5FD',
+              400: '#60A5FA',
+              500: '#3B82F6',
+              600: '#2563EB',
+              700: '#1D4ED8',
+              800: '#1E40AF',
+              900: '#1E3A8A',
+            },
+            success: {
+              DEFAULT: '#10B981',
+              500: '#10B981',
+            },
+            danger: {
+              DEFAULT: '#EF4444',
+              500: '#EF4444',
+            },
+            warning: {
+              DEFAULT: '#F59E0B',
+              500: '#F59E0B',
             }
           }
         }
@@ -37,6 +49,7 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
+      background-color: #F5F5F7;
     }
 
     .custom-scrollbar::-webkit-scrollbar {
@@ -49,12 +62,34 @@
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background-color: #cbd5e1;
+      background-color: #E5E7EB;
       border-radius: 20px;
     }
 
     .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-      background-color: #475569;
+      background-color: #6B7280;
+    }
+
+    /* Card shadows */
+    .card-shadow {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-shadow-hover:hover {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Border radius consistency */
+    .rounded-card {
+      border-radius: 16px;
+    }
+
+    .rounded-element {
+      border-radius: 12px;
+    }
+
+    .rounded-button {
+      border-radius: 8px;
     }
   </style>
   <script type="importmap">
@@ -72,7 +107,8 @@
   <link rel="stylesheet" href="/index.css">
 </head>
 
-<body class="bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200">
+<body class="text-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200"
+  style="background-color: #F5F5F7;">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

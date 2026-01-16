@@ -17,98 +17,105 @@ interface KPICardProps {
   statusTag?: KPIStatus;
 }
 
-export const KPICard: React.FC<KPICardProps> = ({ 
-  title, 
-  value, 
-  meta, 
+import { StatusBadge } from '../App';
+
+export const KPICard: React.FC<KPICardProps> = ({
+  title,
+  value,
+  meta,
   metaValue,
-  icon, 
+  icon,
   color,
   trend,
   inverseColors = false,
   action,
   statusTag
 }) => {
-  const getStatusColor = () => {
+  const getIconBgColor = () => {
     if (!statusTag) {
-        if (!trend || trend === 'neutral') return 'bg-slate-200 dark:bg-slate-700';
-        const isPositive = trend === 'up';
-        const isGood = inverseColors ? !isPositive : isPositive;
-        return isGood ? 'bg-emerald-500' : 'bg-rose-500';
+      if (!trend || trend === 'neutral') return 'bg-blue-50 dark:bg-blue-900/10';
+      const isPositive = trend === 'up';
+      const isGood = inverseColors ? !isPositive : isPositive;
+      return isGood ? 'bg-green-50 dark:bg-green-900/10' : 'bg-red-50 dark:bg-red-900/10';
     }
-    
+
     switch (statusTag) {
-      case 'BOM': return 'bg-emerald-500';
-      case 'MÉDIA': return 'bg-amber-500';
-      case 'RUIM': return 'bg-rose-500';
-      default: return 'bg-slate-200 dark:bg-slate-700';
+      case 'BOM': return 'bg-emerald-50 dark:bg-emerald-900/10';
+      case 'MÉDIA': return 'bg-amber-50 dark:bg-amber-900/10';
+      case 'RUIM': return 'bg-red-50 dark:bg-red-900/10';
+      default: return 'bg-blue-50 dark:bg-blue-900/10';
     }
   };
 
-  const getTextColor = () => {
+  const getIconColor = () => {
     if (!statusTag) {
-        if (!trend || trend === 'neutral') return color || 'text-primary';
-        const isPositive = trend === 'up';
-        const isGood = inverseColors ? !isPositive : isPositive;
-        return isGood ? 'text-emerald-500' : 'text-rose-500';
+      if (!trend || trend === 'neutral') return 'text-primary';
+      const isPositive = trend === 'up';
+      const isGood = inverseColors ? !isPositive : isPositive;
+      return isGood ? 'text-emerald-500' : 'text-red-500';
     }
-    
+
     switch (statusTag) {
-        case 'BOM': return 'text-emerald-500';
-        case 'MÉDIA': return 'text-amber-500';
-        case 'RUIM': return 'text-rose-500';
-        default: return color || 'text-primary';
-      }
+      case 'BOM': return 'text-emerald-500';
+      case 'MÉDIA': return 'text-amber-500';
+      case 'RUIM': return 'text-red-500';
+      default: return 'text-primary';
+    }
   };
 
-  const getBgColor = () => {
-    if (!statusTag) {
-        if (!trend || trend === 'neutral') return 'bg-slate-100 dark:bg-slate-900/50';
-        const isPositive = trend === 'up';
-        const isGood = inverseColors ? !isPositive : isPositive;
-        return isGood ? 'bg-emerald-50 dark:bg-emerald-900/10' : 'bg-rose-50 dark:bg-rose-900/10';
-    }
-    
-    switch (statusTag) {
-        case 'BOM': return 'bg-emerald-50 dark:bg-emerald-900/10';
-        case 'MÉDIA': return 'bg-amber-50 dark:bg-amber-900/10';
-        case 'RUIM': return 'bg-rose-50 dark:bg-rose-900/10';
-        default: return 'bg-slate-100 dark:bg-slate-900/50';
-    }
+  const getAccentClass = () => {
+    if (statusTag === 'BOM') return 'card-accent-green';
+    if (statusTag === 'MÉDIA') return 'card-accent-amber';
+    if (statusTag === 'RUIM') return 'card-accent-red';
+
+    const t = title.toLowerCase();
+    if (t.includes('vgv') || t.includes('faturamento') || t.includes('venda')) return 'card-accent-green';
+    if (t.includes('investimento') || t.includes('gasto') || t.includes('custo')) return 'card-accent-amber';
+    if (t.includes('lead') || t.includes('contato')) return 'card-accent-blue';
+    if (t.includes('meta') || t.includes('progresso')) return 'card-accent-purple';
+
+    return 'card-accent-blue';
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 flex flex-col justify-between h-full hover:shadow-lg transition-all group relative overflow-hidden">
-      <div className={`absolute top-0 right-0 w-1.5 h-full ${getStatusColor()}`} />
-      
-      {statusTag && (
-        <div className={`absolute top-3 right-4 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter text-white z-10 shadow-sm ${getStatusColor()}`}>
-          {statusTag}
-        </div>
-      )}
-      
+    <div className={`bg-white dark:bg-slate-800 rounded-xl p-5 card-shadow hover:shadow-md transition-all border border-slate-100 dark:border-slate-700 h-full flex flex-col justify-between ${getAccentClass()}`}>
       <div>
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${getBgColor()} ${getTextColor()} group-hover:scale-110 transition-transform shadow-sm`}>
-              {icon}
-            </div>
-            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">{title}</h3>
+        {/* Header com título e ícone */}
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{title}</span>
+          <div className={`w-10 h-10 rounded-lg ${getIconBgColor()} flex items-center justify-center ${getIconColor()}`}>
+            {icon}
           </div>
-          {action && <div className="z-10">{action}</div>}
         </div>
-        
-        <div className="mb-2">
-          <span className={`text-2xl font-black ${statusTag ? getTextColor() : trend && trend !== 'neutral' ? getTextColor() : 'text-slate-800 dark:text-white'} tracking-tighter leading-none italic`}>
+
+        {/* Valor principal */}
+        <div className="flex items-center gap-3">
+          <h3 className="text-2xl font-semibold text-slate-900 dark:text-white">
             {value}
-          </span>
+          </h3>
+          {statusTag && <StatusBadge status={statusTag} />}
         </div>
       </div>
 
-      {(meta || metaValue) && (
-        <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 dark:border-slate-700">
-          <span className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">{meta || 'META MÊS'}</span>
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{metaValue}</span>
+      {/* Meta e Contexto */}
+      <div className="mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between">
+        {meta && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{meta}: <span className="text-slate-600 dark:text-slate-300 font-bold ml-1">{metaValue}</span></p>
+          </div>
+        )}
+        {trend && (
+          <span className={`text-xs font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-red-500'} flex items-center gap-0.5`}>
+            {trend === 'up' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+
+      {/* Ação adicional */}
+      {action && (
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          {action}
         </div>
       )}
     </div>

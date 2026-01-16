@@ -5,13 +5,13 @@ import { supabase } from './supabase';
 const parseNumeric = (val: any): number => {
   if (val === null || val === undefined || val === "") return 0;
   if (typeof val === 'number') return val;
-  
+
   let s = val.toString().replace(/[R$\sBRL]/g, '').trim();
-  
+
   while (s.length > 0 && !/[0-9]/.test(s.slice(-1))) {
     s = s.slice(0, -1).trim();
   }
-  
+
   if (!s) return 0;
 
   if (s.includes(',') && s.includes('.')) {
@@ -33,19 +33,19 @@ const parseNumeric = (val: any): number => {
       s = s.replace(/\./g, '');
     }
   }
-  
+
   const num = parseFloat(s);
   return isNaN(num) ? 0 : num;
 };
 
 const normalizeStr = (s: string) => s.toLowerCase()
-  .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[\s_]/g, '');
 
 const findValue = (row: any, keys: string[]) => {
   if (!row) return null;
   const rowKeys = Object.keys(row);
-  
+
   for (const key of keys) {
     const normalizedSearchKey = normalizeStr(key);
     const found = rowKeys.find(rk => {
@@ -75,34 +75,41 @@ const PREFERRED_ORDER = [
 
 const generateColor = (name: string): string => {
   const n = normalizeStr(name);
-  if (n.includes("venda") || n.includes("concluid")) return '#10b981'; 
+  if (n.includes("venda") || n.includes("concluid")) return '#10b981';
   const idx = PREFERRED_ORDER.findIndex(term => n.includes(normalizeStr(term)));
   if (idx === -1) return '#94a3b8';
   return `hsl(214, 66%, ${Math.max(25, 85 - (idx * (50 / PREFERRED_ORDER.length)))}%)`;
+};
+
+// Helper to properly capitalize stage names (Title Case)
+const toTitleCase = (str: string): string => {
+  return str.split(' ').map(word =>
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
 };
 
 export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], rawDataByTable: Record<string, any[]> = {}): DashboardData => {
   let totalUnits = 0;
   let totalVGV = 0;
   let projectName = "Even Digital";
-  
-  let totalSpend = 0; 
+
+  let totalSpend = 0;
   let totalMarketingLeads = 0;
   let totalReach = 0;
   let totalImpressions = 0;
   let totalClicks = 0;
-  let totalSalesValue = 0; 
+  let totalSalesValue = 0;
   let countVendasID14 = 0;
-  
+
   const stageCounts: Record<string, number> = {};
   PREFERRED_ORDER.forEach(stage => {
-    const officialName = stage.charAt(0).toUpperCase() + stage.slice(1);
+    const officialName = toTitleCase(stage);
     stageCounts[officialName] = 0;
   });
 
   const leadsList: ClientLead[] = [];
   const creativeMap: Record<string, CreativePlayback> = {};
-  
+
   let sumFreq = 0;
   let countFreqRows = 0;
 
@@ -132,7 +139,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   marketingRows.forEach((row) => {
     const spend = parseNumeric(findValue(row, ["Amount Spent", "investimento", "valor gasto", "custo", "gastos", "spent"]));
     totalSpend += spend;
-    
+
     const leads = parseNumeric(findValue(row, ["leads", "lead count", "leads_gerados", "results", "resultados", "leads fb", "leads google"]));
     totalMarketingLeads += leads;
 
@@ -147,8 +154,10 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     }
 
     const adName = findValue(row, ["Ad Name", "Nome do Anuncio", "Anuncio", "ad_name", "Anúncio"]) || "Sem Nome";
+    const campaign = findValue(row, ["Campaign", "Campanha", "campaign_name", "Campaign Name"]) || "N/A";
+    const adSet = findValue(row, ["Ad Set Name", "Conjunto de Anuncios", "ad_set_name", "adset_name", "Conjunto de anúncios"]) || "N/A";
     const dateValue = findValue(row, ["Date", "Day", "dia", "data", "created_at"]) || "";
-    
+
     const v3s = parseNumeric(findValue(row, ["3-Second Video Views", "3_sec_video_views", "Video Plays 3s"]));
     const p25 = parseNumeric(findValue(row, ["Video Watches at 25%", "video_p25_watched_actions", "Video P25"]));
     const p50 = parseNumeric(findValue(row, ["Video Watches at 50%", "video_p50_watched_actions", "Video P50"]));
@@ -157,7 +166,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const p100 = parseNumeric(findValue(row, ["Video Watches at 100%", "video_p100_watched_actions", "Video P100"]));
 
     if (!creativeMap[adName]) {
-      creativeMap[adName] = { adName, views3s: 0, p25: 0, p50: 0, p75: 0, p95: 0, p100: 0, retentionRate: 0, date: String(dateValue) };
+      creativeMap[adName] = { adName, campaign, adSet, views3s: 0, p25: 0, p50: 0, p75: 0, p95: 0, p100: 0, retentionRate: 0, date: String(dateValue) };
     }
     creativeMap[adName].views3s += v3s;
     creativeMap[adName].p25 += p25;
@@ -175,34 +184,122 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     .sort((a, b) => b.p100 - a.p100 || b.views3s - a.views3s);
 
   salesRows.forEach((row, index) => {
+    // Log first row to see available fields
+    if (index === 0) {
+      console.log('Campos disponíveis na tabela de vendas:', Object.keys(row));
+    }
+
     const stageNameRaw = findValue(row, ["Nome Etapa", "Status", "etapa", "fase", "status_lead", "fase_funil"]);
     const stageIdRaw = findValue(row, ["ID Etapa", "Etapa ID", "status_id", "id_etapa", "stage_id", "id", "id etapa"]);
     const stageId = stageIdRaw ? String(stageIdRaw).trim() : "";
     const stageName = stageNameRaw ? String(stageNameRaw).trim() : "";
     const stageNorm = normalizeStr(stageName);
 
-    const isVendaConcluida = stageId === "14" || stageNorm.includes("vendasconcluidas") || stageNorm.includes("vendasconcluida");
+    const leadName = findValue(row, ["nome", "name", "cliente", "customer name", "lead"]);
+    const rowQty = parseNumeric(findValue(row, ["quantidade", "qtd", "units_sold", "volume", "unid", "unidades"]));
+    const multiplier = rowQty > 0 ? rowQty : 1;
+    const isVendaConcluida = stageId === "14" ||
+      stageNorm.includes("vendasconcluidas") ||
+      stageNorm.includes("vendasconcluida") ||
+      stageNorm === "venda concluida";
+
+    const isPreAgendamento = stageId === "10" ||
+      stageNorm.includes("preagendamento") ||
+      stageNorm.includes("pre-agendamento");
 
     if (isVendaConcluida) {
       const rowValRaw = findValue(row, ["valor", "vaor", "venda", "price", "amount"]);
       const rowVal = parseNumeric(rowValRaw);
-      const rowQty = parseNumeric(findValue(row, ["quantidade", "qtd", "units_sold", "volume", "unid", "unidades"]));
-      const multiplier = rowQty > 0 ? rowQty : 1;
       totalSalesValue += (rowVal * multiplier);
-      countVendasID14++;
-      stageCounts["Vendas concluidas"] = (stageCounts["Vendas concluidas"] || 0) + 1;
+      countVendasID14 += multiplier; // Use multiplier for total units sold
+
+      console.log(`[SALES] Lead: ${leadName} | ID: ${stageId} | Nome: ${stageName} | Qtd: ${multiplier}`);
+
+      stageCounts["Vendas Concluidas"] = (stageCounts["Vendas Concluidas"] || 0) + 1;
+    } else if (isPreAgendamento) {
+      stageCounts["Pre Agendamento"] = (stageCounts["Pre Agendamento"] || 0) + 1;
     } else if (stageName) {
-      const matchedStage = PREFERRED_ORDER.find(term => stageNorm.includes(normalizeStr(term)));
+      // Try to match with PREFERRED_ORDER
+      let matchedStage = PREFERRED_ORDER.find(term => stageNorm.includes(normalizeStr(term)));
+
+      // Alias matching
+      if (!matchedStage) {
+        if (stageNorm.includes("reuniaomarcada") || (stageNorm.includes("reuniao") && stageNorm.includes("marcad"))) {
+          matchedStage = "reuniao agendada";
+        } else if (stageNorm.includes("contato") || stageNorm.includes("mensagem")) {
+          // Fallback for contact stages
+          if (stageNorm.includes("inicial")) matchedStage = "mensagem inicial";
+          else matchedStage = "tentativa de contato";
+        }
+      }
+
       if (matchedStage) {
-        const officialName = matchedStage.charAt(0).toUpperCase() + matchedStage.slice(1);
-        if (officialName !== "Vendas concluidas") {
+        const officialName = toTitleCase(matchedStage);
+        if (officialName !== "Vendas Concluidas") {
           stageCounts[officialName] = (stageCounts[officialName] || 0) + 1;
+        }
+      } else {
+        // If no match found, try reverse matching (check if any term is contained in the stage name)
+        let foundMatch = false;
+        for (const term of PREFERRED_ORDER) {
+          const termNorm = normalizeStr(term);
+          if (stageNorm.includes(termNorm)) {
+            const officialName = toTitleCase(term);
+            stageCounts[officialName] = (stageCounts[officialName] || 0) + 1;
+            foundMatch = true;
+            break;
+          }
+        }
+
+        // If still no match, count it anyway under the first stage (entrada do lead)
+        if (!foundMatch && stageName) {
+          stageCounts["Entrada Do Lead"] = (stageCounts["Entrada Do Lead"] || 0) + 1;
         }
       }
     }
 
-    const leadName = findValue(row, ["nome", "name", "cliente", "customer name", "lead"]);
+
     if (leadName) {
+      // Get tags if available - try multiple possible field names
+      const tagsRaw = findValue(row, [
+        "tags",
+        "etiquetas",
+        "labels",
+        "categorias",
+        "tag",
+        "etiqueta",
+        "label",
+        "categoria",
+        "tipo",
+        "type",
+        "classificacao",
+        "classification"
+      ]);
+      let tags: string[] | undefined;
+
+      if (tagsRaw) {
+        console.log('Tags encontradas para', leadName, ':', tagsRaw);
+        // Handle different tag formats
+        if (Array.isArray(tagsRaw)) {
+          tags = tagsRaw
+            .map(t => String(t).trim())
+            .filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
+        } else if (typeof tagsRaw === 'string') {
+          // Split by comma, semicolon, or pipe
+          tags = tagsRaw
+            .split(/[,;|]/)
+            .map(t => t.trim())
+            .filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
+        }
+
+        // Only set tags if there are valid tags after filtering
+        if (tags && tags.length === 0) {
+          tags = undefined;
+        }
+
+        console.log('Tags processadas:', tags);
+      }
+
       leadsList.push({
         id: `lead-${index}-${Math.random().toString(36).substr(2, 9)}`,
         name: String(leadName) || "Sem Nome",
@@ -210,8 +307,11 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         phone: String(findValue(row, ["telefone", "phone", "whatsapp", "celular"]) || "---"),
         businessTitle: String(findValue(row, ["titulo do negocio", "negocio", "deal title", "business"]) || "---"),
         pipeline: String(findValue(row, ["pipeline", "funil", "board", "Pipeline"]) || "Padrão"),
-        stage: stageName || "Sem Etapa",
-        date: String(findValue(row, ["data", "created_at", "date", "dia"]) || "---")
+        stage: isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa")),
+        stageId: stageId,
+        quantity: multiplier,
+        date: String(findValue(row, ["data", "created_at", "date", "dia"]) || "---"),
+        tags: tags
       });
     }
   });
@@ -230,11 +330,30 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   const averageFreq = countFreqRows > 0 ? sumFreq / countFreqRows : 1;
 
   const funnelStages: FunnelStage[] = PREFERRED_ORDER.map(term => {
-    const officialName = term.charAt(0).toUpperCase() + term.slice(1);
+    const officialName = toTitleCase(term);
+    const count = stageCounts[officialName] || 0;
+
+    // Calculate value for this stage
+    const stageLeads = leadsList.filter(lead => {
+      const leadStageNorm = normalizeStr(lead.stage);
+      const termNorm = normalizeStr(term);
+      return leadStageNorm.includes(termNorm) || normalizeStr(officialName).includes(leadStageNorm);
+    });
+
+    const stageValue = stageLeads.reduce((sum, lead) => {
+      // For concluded sales, try to get the value
+      if (lead.stage.toLowerCase().includes('concluid')) {
+        // This would need to be enhanced to actually get sale values from data
+        return sum;
+      }
+      return sum;
+    }, 0);
+
     return {
       stage: officialName,
-      count: stageCounts[officialName] || 0,
-      color: generateColor(term)
+      count: count,
+      color: generateColor(term),
+      value: stageValue
     };
   });
 
@@ -250,16 +369,17 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       totalUnitsSold: countVendasID14,
       totalLeads: realTotalLeads,
       totalSpend: totalSpend,
-      marketingMetrics: { 
-        cpm: averageCPM, 
-        ctr: averageCTR, 
-        cpc: averageCPC, 
-        frequency: averageFreq, 
-        cpl: averageCPL, 
+      marketingMetrics: {
+        cpm: averageCPM,
+        ctr: averageCTR,
+        cpc: averageCPC,
+        frequency: averageFreq,
+        cpl: averageCPL,
         reach: totalReach,
         impressions: totalImpressions,
         clicks: totalClicks,
-        landingPageConvRate: 0 
+        leads: leadsForMarketingCalculations, // Added leads
+        landingPageConvRate: 0
       },
       salesMetrics: { avgResponseTime: 'N/A', totalBilling: 0, generalConvRate: 0 }
     },

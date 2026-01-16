@@ -16,7 +16,7 @@ export const FunnelChartComponent: React.FC<Props> = ({ data }) => {
       {data.map((stage, index) => {
         const prevCount = index > 0 ? data[index - 1].count : null;
         const convRate = prevCount ? ((stage.count / prevCount) * 100).toFixed(1) : null;
-        
+
         return (
           <div key={stage.stage} className="flex items-center gap-4 group">
             {/* Box de Conversão à esquerda */}
@@ -35,11 +35,14 @@ export const FunnelChartComponent: React.FC<Props> = ({ data }) => {
               </span>
             </div>
 
-            {/* Barra Visual - Quadrangular total conforme imagem */}
-            <div className="flex-1 h-6 bg-slate-50 dark:bg-slate-900/50 overflow-hidden relative">
-              <div 
-                className="h-full bg-primary-500 transition-all duration-1000"
-                style={{ width: `${(stage.count / maxCount) * 100}%` }}
+            <div className="flex-1 h-8 bg-slate-50 dark:bg-slate-950/50 overflow-hidden relative rounded-r-md border-l-4" style={{ borderColor: stage.color }}>
+              <div
+                className="h-full transition-all duration-1000 opacity-80"
+                style={{
+                  width: `${(stage.count / maxCount) * 100}%`,
+                  backgroundColor: stage.color,
+                  boxShadow: `0 0 15px ${stage.color}40`
+                }}
               />
             </div>
 

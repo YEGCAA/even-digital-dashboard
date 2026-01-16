@@ -1,0 +1,45 @@
+{
+  "loginsEven": {
+    "count": 2,
+    "users": [
+      {
+        "id": 1,
+        "user": "admin",
+        "senha": "123"
+      },
+      {
+        "id": 2,
+        "user": "pedrosa",
+        "senha": "pedrosa123"
+      }
+    ]
+  },
+  "pedrosaTest": {
+    "error": "Cannot coerce the result to a single JSON object"
+  },
+  "adminTest": {
+    "error": "Cannot coerce the result to a single JSON object"
+  },
+  "tables": {
+    "Vendas_2": {
+      "accessible": true,
+      "isEmpty": false,
+      "columns": [
+        "ID",
+        "data",
+        "nome",
+        "email",
+        "telefone",
+        "titulo do negocio",
+        "ID negocio",
+        "ID pipeline",
+        "Pipeline",
+        "ID etapa",
+        "Nome Etapa",
+        "valor",
+        "Lead semana?",
+        "Etiqueta"
+      ]
+    }
+  }
+}
