@@ -21,7 +21,9 @@ export interface DashboardGoals {
   ctr: { value: number; mode: GoalMode };
   cpm: { value: number; mode: GoalMode };
   frequency: { value: number; mode: GoalMode };
+  quantity: { value: number; mode: GoalMode };
 }
+
 
 export interface ClientData {
   projectName: string;

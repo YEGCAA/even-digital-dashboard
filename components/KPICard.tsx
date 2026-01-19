@@ -2,7 +2,7 @@
 import React from 'react';
 
 export type KPITrend = 'up' | 'down' | 'neutral';
-export type KPIStatus = 'BOM' | 'MÉDIA' | 'RUIM' | undefined;
+export type KPIStatus = 'EXCELENTE' | 'BOM' | 'MÉDIA' | 'RUIM' | undefined;
 
 interface KPICardProps {
   title: string;
@@ -40,6 +40,7 @@ export const KPICard: React.FC<KPICardProps> = ({
     }
 
     switch (statusTag) {
+      case 'EXCELENTE': return 'bg-cyan-50 dark:bg-cyan-900/10';
       case 'BOM': return 'bg-emerald-50 dark:bg-emerald-900/10';
       case 'MÉDIA': return 'bg-amber-50 dark:bg-amber-900/10';
       case 'RUIM': return 'bg-red-50 dark:bg-red-900/10';
@@ -56,6 +57,7 @@ export const KPICard: React.FC<KPICardProps> = ({
     }
 
     switch (statusTag) {
+      case 'EXCELENTE': return 'text-cyan-500';
       case 'BOM': return 'text-emerald-500';
       case 'MÉDIA': return 'text-amber-500';
       case 'RUIM': return 'text-red-500';

@@ -11,8 +11,9 @@ import {
   MousePointer2, Eye as ReachIcon, Layout,
   Save, AlertCircle, Award, Trophy, Star,
   Terminal, Code, Clipboard,
-  Play, Video, Activity,
-  BarChart as VerticalBarIcon, Menu, Sparkles, Copy
+  Play, Video, Activity, Trash2,
+  BarChart as VerticalBarIcon, Menu, Sparkles, Copy,
+  Briefcase
 } from 'lucide-react';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 
@@ -61,6 +62,7 @@ export const StatusBadge = ({ status }: { status: KPIStatus }) => {
   const isAvg = status === 'MÉDIA';
   const getStatusStyles = () => {
     switch (status) {
+      case 'EXCELENTE': return 'bg-cyan-500 text-white border-cyan-600 shadow-sm shadow-cyan-500/30';
       case 'BOM': return 'bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/20';
       case 'MÉDIA': return 'bg-amber-500 text-white border-amber-600 shadow-sm shadow-amber-500/20';
       case 'RUIM': return 'bg-rose-500 text-white border-rose-600 shadow-sm shadow-rose-500/20';
@@ -81,7 +83,9 @@ const App: React.FC = () => {
   const [isFiltering, setIsFiltering] = useState(false);
   const [baseData, setBaseData] = useState<DashboardData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'metas' | 'marketing' | 'sales'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'metas' | 'marketing' | 'sales' | 'clientes'>('overview');
+  const [clients, setClients] = useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
 
   const [isInspectOpen, setIsInspectOpen] = useState(false);
   const [inspectTable, setInspectTable] = useState<string | null>(null);
@@ -101,35 +105,73 @@ const App: React.FC = () => {
       cpl: { value: 0, mode: 'fixed' },
       ctr: { value: 0, mode: 'fixed' },
       cpm: { value: 0, mode: 'fixed' },
-      frequency: { value: 0, mode: 'fixed' }
+      frequency: { value: 0, mode: 'fixed' },
+      quantity: { value: 0, mode: 'monthly' }
     };
   });
 
+  const GoalInput = ({ value, onChange, placeholder }: { value: number, onChange: (val: number) => void, placeholder?: string }) => {
+    const [inputValue, setInputValue] = useState(String(value));
+
+    useEffect(() => {
+      // Sync local string when external value changes (but only if it's different to avoid cursor jumps)
+      if (parseFloat(inputValue) !== value) {
+        setInputValue(String(value));
+      }
+    }, [value]);
+
+    return (
+      <input
+        type="text"
+        inputMode="decimal"
+        placeholder={placeholder}
+        value={inputValue}
+        onChange={(e) => {
+          const val = e.target.value.replace(',', '.');
+          // Allow numbers and a single decimal point
+          if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+            setInputValue(val);
+            const parsed = parseFloat(val);
+            onChange(isNaN(parsed) ? 0 : parsed);
+          }
+        }}
+        onBlur={() => {
+          // Normalize on blur (e.g., "10." -> "10")
+          setInputValue(String(value));
+        }}
+        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-white shadow-inner"
+      />
+    );
+  };
+
   const GoalInputCard = ({ icon: Icon, title, metricKey }: { icon: any, title: string, metricKey: keyof DashboardGoals }) => (
-    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 hover:shadow-md transition-shadow group">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-primary"><Icon size={18} /></div>
-        <h4 className="text-sm font-semibold text-slate-800 dark:text-white">{title}</h4>
+        <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-slate-400 group-hover:text-primary transition-colors">
+          <Icon size={18} />
+        </div>
+        <h4 className="text-sm font-bold text-slate-700 dark:text-white">{title}</h4>
       </div>
       <div className="space-y-4">
         <div>
-          <label className="text-xs font-medium text-slate-500 mb-1.5 block">Valor Alvo</label>
-          <input
-            type="number"
+          <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Valor Alvo</label>
+          <GoalInput
             value={goals[metricKey].value}
-            onChange={(e) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: parseFloat(e.target.value) || 0 } })}
-            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+            onChange={(val) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: val } })}
           />
         </div>
-        {(metricKey === 'amountSpent' || metricKey === 'leads') && (
+        {(metricKey === 'amountSpent' || metricKey === 'leads' || metricKey === 'quantity') && (
           <div>
-            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Modo de Cálculo</label>
-            <div className="flex gap-2">
+            <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Modo de Cálculo</label>
+            <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl">
               {(['daily', 'monthly', 'fixed'] as GoalMode[]).map(m => (
                 <button
                   key={m}
                   onClick={() => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], mode: m } })}
-                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${goals[metricKey].mode === m ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${goals[metricKey].mode === m
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                    }`}
                 >
                   {m === 'daily' ? 'Diário' : m === 'monthly' ? 'Mensal' : 'Fixo'}
                 </button>
@@ -195,11 +237,14 @@ const App: React.FC = () => {
   const [aiReport, setAiReport] = useState<string>('');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  const loadData = async (silent = false) => {
+  const loadData = async (silent = false, specificUserId?: number) => {
     if (!currentUser) return;
+    const targetUserId = specificUserId || currentUser.id;
+    const targetUsername = specificUserId ? (clients.find(c => c.id === specificUserId)?.user || '') : currentUser.username;
+
     // Fix for user 'pedrosa' using specific table
-    const salesTable = currentUser.username.toLowerCase().includes('pedrosa') ? 'Vendas_2' : `Vendas_${currentUser.id}`;
-    const tablesToFetch = [`Marketing_${currentUser.id}`, salesTable, `Dados`];
+    const salesTable = targetUsername.toLowerCase().includes('pedrosa') ? 'Vendas_2' : `Vendas_${targetUserId}`;
+    const tablesToFetch = [`Marketing_${targetUserId}`, salesTable, `Dados`];
     if (!silent) setLoading(LoadingState.LOADING);
     const result = await fetchData(tablesToFetch);
     setBaseData(result.data);
@@ -210,7 +255,7 @@ const App: React.FC = () => {
     }
 
     // Try to load goals from Meta_2 if user is Pedrosa
-    if (currentUser.username.toLowerCase().includes('pedrosa') || currentUser.id === 2) {
+    if (targetUsername.toLowerCase().includes('pedrosa') || targetUserId === 2) {
       try {
         const { data: remoteGoals, error } = await supabase
           .from('Meta_2')
@@ -227,7 +272,8 @@ const App: React.FC = () => {
             cpl: { ...prev.cpl, value: remoteGoals.CPL || 0 },
             ctr: { ...prev.ctr, value: remoteGoals.CTR || 0 },
             cpm: { ...prev.cpm, value: remoteGoals.CPM || 0 },
-            frequency: { ...prev.frequency, value: remoteGoals.Frequência || 0 }
+            frequency: { ...prev.frequency, value: remoteGoals.Frequência || 0 },
+            quantity: { ...prev.quantity, value: remoteGoals.Quantidade || 0 }
           }));
         }
       } catch (err) {
@@ -236,8 +282,23 @@ const App: React.FC = () => {
     }
   };
 
+  const loadClients = async () => {
+    if (currentUser?.role !== 'admin') return;
+    try {
+      const { data: logins, error } = await supabase.from('Logins Even').select('*');
+      if (!error && logins) {
+        setClients(logins.filter(c => c.user !== 'admin'));
+      }
+    } catch (err) {
+      console.error('Error loading clients:', err);
+    }
+  };
+
   useEffect(() => {
-    if (isAuthenticated) loadData();
+    if (isAuthenticated) {
+      loadData();
+      if (currentUser?.role === 'admin') loadClients();
+    }
   }, [isAuthenticated, currentUser?.id]);
 
   useEffect(() => {
@@ -309,6 +370,54 @@ const App: React.FC = () => {
     return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData);
   }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds]);
 
+  const handleDeleteGoals = async () => {
+    if (!confirm('Tem certeza que deseja excluir as metas do banco de dados? Isso voltará os valores para zero.')) return;
+
+    if (currentUser?.username.toLowerCase().includes('pedrosa') || currentUser?.id === 2) {
+      try {
+        const { error } = await supabase
+          .from('Meta_2')
+          .delete()
+          .eq('id', 1);
+
+        if (error) {
+          console.error('Erro ao excluir no Supabase:', error);
+          alert('Erro ao excluir as metas no banco de dados.');
+        } else {
+          // Reset local state
+          const resetGoals: DashboardGoals = {
+            amountSpent: { value: 0, mode: 'monthly' },
+            leads: { value: 0, mode: 'monthly' },
+            cpl: { value: 0, mode: 'fixed' },
+            ctr: { value: 0, mode: 'fixed' },
+            cpm: { value: 0, mode: 'fixed' },
+            frequency: { value: 0, mode: 'fixed' },
+            quantity: { value: 0, mode: 'monthly' }
+          };
+          setGoals(resetGoals);
+          localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
+          alert('Metas excluídas com sucesso!');
+        }
+      } catch (err) {
+        console.error('Exception deleting goals:', err);
+      }
+    } else {
+      // For local-only users
+      const resetGoals: DashboardGoals = {
+        amountSpent: { value: 0, mode: 'monthly' },
+        leads: { value: 0, mode: 'monthly' },
+        cpl: { value: 0, mode: 'fixed' },
+        ctr: { value: 0, mode: 'fixed' },
+        cpm: { value: 0, mode: 'fixed' },
+        frequency: { value: 0, mode: 'fixed' },
+        quantity: { value: 0, mode: 'monthly' }
+      };
+      setGoals(resetGoals);
+      localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
+      alert('Metas locais limpas!');
+    }
+  };
+
   const handleSaveGoals = async () => {
     // Save to localStorage (existing behavior)
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(goals));
@@ -325,7 +434,8 @@ const App: React.FC = () => {
             CPL: goals.cpl.value,
             CTR: goals.ctr.value,
             CPM: goals.cpm.value,
-            Frequência: goals.frequency.value
+            Frequência: goals.frequency.value,
+            Quantidade: goals.quantity.value
           });
 
 
@@ -360,21 +470,25 @@ const App: React.FC = () => {
     cpl: goals.cpl.value,
     ctr: goals.ctr.value,
     cpm: goals.cpm.value,
-    frequency: goals.frequency.value
+    frequency: goals.frequency.value,
+    quantity: getScaledValue(goals.quantity)
   }), [goals, startDate, endDate]);
 
   const calculateStatus = (actual: number, target: number, type: 'higher-better' | 'lower-better'): KPIStatus => {
     if (target === 0) return undefined;
     const diff = (actual / target);
-    const buffer = 0.05;
+
     if (type === 'higher-better') {
-      if (diff > (1 + buffer)) return 'BOM';
-      if (diff < (1 - buffer)) return 'RUIM';
-      return 'MÉDIA';
+      if (diff >= 1.2) return 'EXCELENTE';
+      if (diff >= 1.0) return 'BOM';
+      if (diff >= 0.8) return 'MÉDIA';
+      return 'RUIM';
     } else {
-      if (diff < (1 - buffer)) return 'BOM';
-      if (diff > (1 + buffer)) return 'RUIM';
-      return 'MÉDIA';
+      // lower-better (like CPL, CPM, Spend)
+      if (diff <= 0.8) return 'EXCELENTE';
+      if (diff <= 1.0) return 'BOM';
+      if (diff <= 1.2) return 'MÉDIA';
+      return 'RUIM';
     }
   };
 
@@ -386,7 +500,8 @@ const App: React.FC = () => {
       cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better'),
       ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better'),
       cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better'),
-      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better')
+      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better'),
+      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better')
     };
   }, [data, scaledGoals]);
 
@@ -772,10 +887,12 @@ Gere um relatório completo em português do Brasil.`;
           </div>
         </div>
         <nav className="flex-1 px-4 py-2 space-y-1">
-          {[{ id: 'overview', label: 'Visão Geral', icon: <Grid size={18} />, color: 'primary' },
-          { id: 'metas', label: 'Metas', icon: <Target size={18} />, color: 'purple' },
-          { id: 'marketing', label: 'Marketing', icon: <BarChart3 size={18} />, color: 'blue' },
-          { id: 'sales', label: 'Vendas', icon: <Users size={18} />, color: 'indigo' }
+          {[
+            { id: 'overview', label: 'Visão Geral', icon: <Grid size={18} />, color: 'primary' },
+            { id: 'metas', label: 'Metas', icon: <Target size={18} />, color: 'purple' },
+            { id: 'marketing', label: 'Marketing', icon: <BarChart3 size={18} />, color: 'blue' },
+            { id: 'sales', label: 'Vendas', icon: <Users size={18} />, color: 'indigo' },
+            ...(currentUser?.role === 'admin' ? [{ id: 'clientes', label: 'Clientes', icon: <Briefcase size={18} />, color: 'amber' }] : [])
           ].map(item => (
             <button
               key={item.id}
@@ -800,8 +917,12 @@ Gere um relatório completo em português do Brasil.`;
                 G
               </div>
               <div>
-                <p className="text-xs font-black text-slate-900 dark:text-white leading-none">Grupo Pedrosa</p>
-                <span className="text-[10px] text-blue-600 font-bold mt-1 block uppercase tracking-tighter">Cliente Premium</span>
+                <p className="text-xs font-black text-slate-900 dark:text-white leading-none">
+                  {currentUser?.role === 'admin' ? 'Administrador' : currentUser?.username.toLowerCase().includes('pedrosa') ? 'Grupo Pedrosa' : currentUser?.username}
+                </p>
+                <span className="text-[10px] text-blue-600 font-bold mt-1 block uppercase tracking-tighter">
+                  {currentUser?.role === 'admin' ? 'Acesso Total' : 'Cliente Premium'}
+                </span>
               </div>
             </div>
             <button
@@ -938,6 +1059,7 @@ Gere um relatório completo em português do Brasil.`;
               <KPICard title="CPL Médio" value={FORMATTERS.currency(data.metrics.marketingMetrics.cpl)} meta="META CPL" metaValue={FORMATTERS.currency(scaledGoals.cpl)} icon={<CplIcon size={16} />} statusTag={statusMap.cpl} />
             </div>
 
+
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-wrap items-center gap-3">
               <FilterDropdown title="Campanhas" options={filterOptions.campaigns} selected={selectedCampaigns} onToggle={(camp: any) => toggleFilter(selectedCampaigns, setSelectedCampaigns, camp)} isOpen={isCampaignDropdownOpen} setIsOpen={setIsCampaignDropdownOpen} icon={Layers} dropdownRef={campaignRef} />
               <FilterDropdown title="Conjuntos" options={filterOptions.adSets} selected={selectedAdSets} onToggle={(i: any) => toggleFilter(selectedAdSets, setSelectedAdSets, i)} isOpen={isAdSetDropdownOpen} setIsOpen={setIsAdSetDropdownOpen} icon={Layout} dropdownRef={adSetRef} />
@@ -964,17 +1086,23 @@ Gere um relatório completo em português do Brasil.`;
                     <p className="text-xs text-slate-500 font-medium mt-0.5">Defina os objetivos de performance para os indicadores</p>
                   </div>
                 </div>
-                <button onClick={handleSaveGoals} className="px-6 py-2.5 bg-primary hover:bg-primary-600 text-white rounded-lg font-semibold text-xs shadow-sm shadow-primary/20 flex items-center gap-2 transition-all active:scale-95">
-                  <Save size={16} /> Salvar Alterações
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={handleDeleteGoals} className="px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 dark:text-rose-400 rounded-xl font-bold text-xs flex items-center gap-2 transition-all active:scale-95 border border-rose-100 dark:border-rose-900/50">
+                    <Trash2 size={16} /> <span className="hidden sm:inline">Excluir Metas</span>
+                  </button>
+                  <button onClick={handleSaveGoals} className="px-6 py-2.5 bg-primary hover:bg-primary-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-primary/20 flex items-center gap-2 transition-all active:scale-95">
+                    <Save size={16} /> Salvar Alterações
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <GoalInputCard icon={DollarSign} title="Orcamento" metricKey="amountSpent" />
+                <GoalInputCard icon={DollarSign} title="Orçamento" metricKey="amountSpent" />
                 <GoalInputCard icon={Users} title="Leads" metricKey="leads" />
                 <GoalInputCard icon={CplIcon} title="Custo por Lead (CPL)" metricKey="cpl" />
                 <GoalInputCard icon={Percent} title="CTR" metricKey="ctr" />
                 <GoalInputCard icon={ReachIcon} title="CPM" metricKey="cpm" />
                 <GoalInputCard icon={RefreshCw} title="Frequência" metricKey="frequency" />
+                <GoalInputCard icon={ShoppingBag} title="Quantidade de Vendas" metricKey="quantity" />
               </div>
             </div>
           </div>
@@ -1154,9 +1282,10 @@ Gere um relatório completo em português do Brasil.`;
               <KPICard
                 title="Quantidade"
                 value={FORMATTERS.number(data.metrics.totalUnitsSold)}
-                meta="VENDAS CONCLUÍDAS"
-                metaValue="Total de Unidades"
+                meta="PROGRESSO"
+                metaValue={`Meta: ${FORMATTERS.number(scaledGoals.quantity)} un.`}
                 icon={<ShoppingBag size={16} />}
+                statusTag={statusMap.quantity}
                 trend="up"
               />
 
@@ -1492,6 +1621,74 @@ Gere um relatório completo em português do Brasil.`;
                     );
                   })}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'clientes' && currentUser?.role === 'admin' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600"><Briefcase size={24} /></div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Gestão de Clientes</h2>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Visualize e alterne entre as métricas de cada projeto</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-slate-800">
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic">ID</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Usuário/Projeto</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Tipo de Acesso</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                    {clients.map((client) => (
+                      <tr key={client.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
+                        <td className="px-6 py-4 text-xs font-bold text-slate-400">#{client.id}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center font-bold text-slate-600 dark:text-slate-400 text-xs uppercase">
+                              {client.user?.charAt(0)}
+                            </div>
+                            <span className="text-sm font-bold text-slate-700 dark:text-white group-hover:text-primary transition-colors">
+                              {client.user?.toLowerCase().includes('pedrosa') ? 'Grupo Pedrosa' : client.user}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-[10px] font-black uppercase italic">
+                            Cliente Premium
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedClientId(client.id);
+                              loadData(false, client.id);
+                              setActiveTab('overview');
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-600 text-white rounded-xl text-[10px] font-black uppercase italic transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 active:scale-95"
+                          >
+                            <ReachIcon size={14} /> Visualizar Métricas
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {clients.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-12 text-center">
+                          <Database size={40} className="mx-auto text-slate-200 dark:text-slate-700 mb-4" />
+                          <p className="text-sm font-bold text-slate-400 uppercase italic tracking-widest">Nenhum cliente encontrado no banco de dados</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
