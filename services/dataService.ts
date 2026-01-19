@@ -113,13 +113,24 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   let sumFreq = 0;
   let countFreqRows = 0;
 
-  const marketingTableName = fetchedTables.find(t => t.toLowerCase().includes('marketing'));
-  const salesTableName = fetchedTables.find(t => t.toLowerCase().includes('venda'));
-  const dadosTableName = fetchedTables.find(t => t.toLowerCase().includes('dados'));
+  const marketingTables = fetchedTables.filter(t => t.toLowerCase().includes('marketing'));
+  const salesTables = fetchedTables.filter(t => t.toLowerCase().includes('venda'));
+  const dadosTables = fetchedTables.filter(t => t.toLowerCase().includes('dados'));
 
-  const marketingRows = marketingTableName ? rawDataByTable[marketingTableName] : [];
-  const salesRows = salesTableName ? rawDataByTable[salesTableName] : [];
-  const dadosRows = dadosTableName ? rawDataByTable[dadosTableName] : [];
+  const marketingRows: any[] = [];
+  marketingTables.forEach(t => {
+    if (rawDataByTable[t]) marketingRows.push(...rawDataByTable[t]);
+  });
+
+  const salesRows: any[] = [];
+  salesTables.forEach(t => {
+    if (rawDataByTable[t]) salesRows.push(...rawDataByTable[t]);
+  });
+
+  const dadosRows: any[] = [];
+  dadosTables.forEach(t => {
+    if (rawDataByTable[t]) dadosRows.push(...rawDataByTable[t]);
+  });
 
   const infoSource = dadosRows.length > 0 ? dadosRows : rows;
   for (let i = infoSource.length - 1; i >= 0; i--) {
