@@ -52,6 +52,8 @@ export interface ClientLead {
   quantity?: number;
   date: string;
   tags?: string[];
+  statusVenda2?: string;
+  value?: number;
 }
 
 export interface CreativePlayback {

@@ -2,7 +2,7 @@
 import React from 'react';
 
 export type KPITrend = 'up' | 'down' | 'neutral';
-export type KPIStatus = 'EXCELENTE' | 'BOM' | 'MÉDIA' | 'RUIM' | undefined;
+export type KPIStatus = 'EXCELENTE' | 'MÉDIA' | 'OTIMIZAR' | 'BOM' | 'RUIM' | undefined;
 
 interface KPICardProps {
   title: string;
@@ -40,10 +40,11 @@ export const KPICard: React.FC<KPICardProps> = ({
     }
 
     switch (statusTag) {
-      case 'EXCELENTE': return 'bg-cyan-50 dark:bg-cyan-900/10';
+      case 'EXCELENTE': return 'bg-emerald-50 dark:bg-emerald-900/10';
       case 'BOM': return 'bg-emerald-50 dark:bg-emerald-900/10';
-      case 'MÉDIA': return 'bg-amber-50 dark:bg-amber-900/10';
-      case 'RUIM': return 'bg-red-50 dark:bg-red-900/10';
+      case 'MÉDIA': return 'bg-blue-50 dark:bg-blue-900/10';
+      case 'OTIMIZAR': return 'bg-orange-50 dark:bg-orange-900/10';
+      case 'RUIM': return 'bg-orange-50 dark:bg-orange-900/10';
       default: return 'bg-blue-50 dark:bg-blue-900/10';
     }
   };
@@ -57,18 +58,19 @@ export const KPICard: React.FC<KPICardProps> = ({
     }
 
     switch (statusTag) {
-      case 'EXCELENTE': return 'text-cyan-500';
+      case 'EXCELENTE': return 'text-emerald-500';
       case 'BOM': return 'text-emerald-500';
-      case 'MÉDIA': return 'text-amber-500';
-      case 'RUIM': return 'text-red-500';
+      case 'MÉDIA': return 'text-blue-500';
+      case 'OTIMIZAR': return 'text-orange-500';
+      case 'RUIM': return 'text-orange-500';
       default: return 'text-primary';
     }
   };
 
   const getAccentClass = () => {
-    if (statusTag === 'BOM') return 'card-accent-green';
-    if (statusTag === 'MÉDIA') return 'card-accent-amber';
-    if (statusTag === 'RUIM') return 'card-accent-red';
+    if (statusTag === 'BOM' || statusTag === 'EXCELENTE') return 'card-accent-green';
+    if (statusTag === 'MÉDIA') return 'card-accent-blue';
+    if (statusTag === 'OTIMIZAR' || statusTag === 'RUIM') return 'card-accent-amber';
 
     const t = title.toLowerCase();
     if (t.includes('vgv') || t.includes('faturamento') || t.includes('venda')) return 'card-accent-green';

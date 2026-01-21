@@ -114,8 +114,9 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   let countFreqRows = 0;
 
   const marketingTables = fetchedTables.filter(t => t.toLowerCase().includes('marketing'));
-  const salesTables = fetchedTables.filter(t => t.toLowerCase().includes('venda'));
+  const salesTables = fetchedTables.filter(t => t.toLowerCase().includes('venda') && !t.toLowerCase().includes('status'));
   const dadosTables = fetchedTables.filter(t => t.toLowerCase().includes('dados'));
+  const statusTables = fetchedTables.filter(t => t.toLowerCase().includes('status_venda'));
 
   const marketingRows: any[] = [];
   marketingTables.forEach(t => {
@@ -130,6 +131,23 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   const dadosRows: any[] = [];
   dadosTables.forEach(t => {
     if (rawDataByTable[t]) dadosRows.push(...rawDataByTable[t]);
+  });
+
+  const statusRows: any[] = [];
+  statusTables.forEach(t => {
+    if (rawDataByTable[t]) statusRows.push(...rawDataByTable[t]);
+  });
+
+  // Create a map for quick status lookup by ID negocio
+  const cleanStatusStr = (s: any) => String(s || '').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+
+  const statusMap: Record<string, string> = {};
+  statusRows.forEach(row => {
+    const idNegocioRaw = findValue(row, ["ID negocio", "id_negocio", "deal_id"]);
+    const statusVal = findValue(row, ["status", "venda_status", "status_venda"]);
+    if (idNegocioRaw && statusVal) {
+      statusMap[String(idNegocioRaw).trim()] = cleanStatusStr(statusVal);
+    }
   });
 
   const infoSource = dadosRows.length > 0 ? dadosRows : rows;
@@ -206,21 +224,33 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const stageName = stageNameRaw ? String(stageNameRaw).trim() : "";
     const stageNorm = normalizeStr(stageName);
 
+    const idNegocioRaw = findValue(row, ["ID negocio", "id_negocio", "deal_id"]);
+    const idNegocio = idNegocioRaw ? String(idNegocioRaw).trim() : "";
+
+    const statusFromMap = idNegocio ? statusMap[idNegocio] : null;
+
+    const statusVendaVal = statusFromMap || findValue(row, ["status_venda_2", "Status_Venda_2", "status_venda", "venda_status"]);
+    const statusVendaRaw = cleanStatusStr(statusVendaVal);
+    const statusVendaNorm = normalizeStr(statusVendaRaw);
+
     const leadName = findValue(row, ["nome", "name", "cliente", "customer name", "lead"]);
     const rowQty = parseNumeric(findValue(row, ["quantidade", "qtd", "units_sold", "volume", "unid", "unidades"]));
     const multiplier = rowQty > 0 ? rowQty : 1;
+
+    const rowValRaw = findValue(row, ["valor", "vaor", "venda", "price", "amount", "valor_venda", "valor_venda_2"]);
+    const rowVal = parseNumeric(rowValRaw);
+
     const isVendaConcluida = stageId === "14" ||
       stageNorm.includes("vendasconcluidas") ||
       stageNorm.includes("vendasconcluida") ||
-      stageNorm === "venda concluida";
+      stageNorm === "venda concluida" ||
+      statusVendaNorm.includes("ganho");
 
     const isPreAgendamento = stageId === "10" ||
       stageNorm.includes("preagendamento") ||
       stageNorm.includes("pre-agendamento");
 
     if (isVendaConcluida) {
-      const rowValRaw = findValue(row, ["valor", "vaor", "venda", "price", "amount"]);
-      const rowVal = parseNumeric(rowValRaw);
       totalSalesValue += (rowVal * multiplier);
       countVendasID14 += multiplier; // Use multiplier for total units sold
 
@@ -322,7 +352,9 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         stageId: stageId,
         quantity: multiplier,
         date: String(findValue(row, ["data", "created_at", "date", "dia"]) || "---"),
-        tags: tags
+        tags: tags,
+        statusVenda2: statusVendaRaw,
+        value: rowVal * multiplier
       });
     }
   });
@@ -351,14 +383,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       return leadStageNorm.includes(termNorm) || normalizeStr(officialName).includes(leadStageNorm);
     });
 
-    const stageValue = stageLeads.reduce((sum, lead) => {
-      // For concluded sales, try to get the value
-      if (lead.stage.toLowerCase().includes('concluid')) {
-        // This would need to be enhanced to actually get sale values from data
-        return sum;
-      }
-      return sum;
-    }, 0);
+    const stageValue = stageLeads.reduce((sum, lead) => sum + (lead.value || 0), 0);
 
     return {
       stage: officialName,
