@@ -94,8 +94,8 @@ export const KPICard: React.FC<KPICardProps> = ({
 
         {/* Valor principal */}
         <div className="flex items-center gap-3">
-          <h3 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            {value}
+          <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white leading-tight break-words">
+            {typeof value === 'object' ? value : value}
           </h3>
           {statusTag && <StatusBadge status={statusTag} />}
         </div>

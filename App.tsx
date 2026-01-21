@@ -333,6 +333,7 @@ const App: React.FC = () => {
         tablesToFetch.push(`Marketing_${id}`);
         tablesToFetch.push(`Vendas_${id}`);
         tablesToFetch.push(`Status_Venda_${id}`);
+        tablesToFetch.push(`valores_${id}`);
       }
     });
 
@@ -480,7 +481,7 @@ const App: React.FC = () => {
       filteredRawData[tableName] = filtered;
       allFilteredRows.push(...filtered);
     });
-    return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData);
+    return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData, startDate, endDate);
   }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds]);
 
   const handleDeleteGoals = async () => {
@@ -1563,18 +1564,26 @@ const App: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <KPICard
                   title="Faturamento"
-                  value={FORMATTERS.currency(data.metrics.totalRevenue)}
+                  value={
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter block">
+                      {FORMATTERS.currency(data.metrics.totalRevenue)}
+                    </span>
+                  }
                   meta="RECEITA TOTAL"
-                  metaValue="Vendas Realizadas"
+                  metaValue="VGV Realizado"
                   icon={<DollarSign size={16} />}
                   trend="up"
                 />
 
                 <KPICard
                   title="Ticket Médio"
-                  value={FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
+                  value={
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter block">
+                      {FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
+                    </span>
+                  }
                   meta="VALOR MÉDIO"
-                  metaValue="Por Venda"
+                  metaValue="Por Unidade"
                   icon={<TrendingUp size={16} />}
                 />
 
