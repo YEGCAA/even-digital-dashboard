@@ -1267,14 +1267,56 @@ const App: React.FC = () => {
           activeTab === 'overview' && data && (
             <div className={`space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <KPICard title="VGV Gerenciado" value={FORMATTERS.currency(data.clientInfo.vgv)} meta="FONTE DE DADOS" metaValue="Base Dados" icon={<TrendingUp size={16} />} />
-                <KPICard title="Vendas Concluídas" value={FORMATTERS.currency(data.metrics.totalRevenue)} meta="STATUS ATUAL" metaValue="VGV Realizado" icon={<ShoppingBag size={16} />} trend="up" />
-                <KPICard title="Vendas / VGV" value={FORMATTERS.percent((data.metrics.totalRevenue / (data.clientInfo.vgv || 1)) * 100)} meta="TAXA DE SUCESSO" metaValue="Performance" icon={<Percent size={16} />} trend="up" />
+                <KPICard
+                  title="VGV Gerenciado"
+                  value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.clientInfo.vgv)}</span>}
+                  meta="FONTE DE DADOS"
+                  metaValue="Base Dados"
+                  icon={<TrendingUp size={16} />}
+                />
+                <KPICard
+                  title="Vendas Concluídas"
+                  value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.metrics.totalRevenue)}</span>}
+                  meta="STATUS ATUAL"
+                  metaValue="VGV Realizado"
+                  icon={<ShoppingBag size={16} />}
+                  trend="up"
+                />
+                <KPICard
+                  title="Vendas / VGV"
+                  value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.percent((data.metrics.totalRevenue / (data.clientInfo.vgv || 1)) * 100)}</span>}
+                  meta="TAXA DE SUCESSO"
+                  metaValue="Performance"
+                  icon={<Percent size={16} />}
+                  trend="up"
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <KPICard title="Investimento em Mídia" value={FORMATTERS.currency(data.metrics.totalSpend)} meta="META MENSAL" metaValue={FORMATTERS.currency(scaledGoals.amountSpent)} icon={<DollarSign size={16} />} statusTag={statusMap.amountSpent} inverseColors={true} />
-                <KPICard title="Total de Leads" value={FORMATTERS.number(data.metrics.marketingMetrics.leads)} meta="META MENSAL" metaValue={FORMATTERS.number(scaledGoals.leads)} icon={<RefreshCw size={16} />} statusTag={statusMap.leads} />
-                <KPICard title="CPL Médio" value={FORMATTERS.currency(data.metrics.marketingMetrics.cpl)} meta="META CPL" metaValue={FORMATTERS.currency(scaledGoals.cpl)} icon={<CplIcon size={16} />} statusTag={statusMap.cpl} />
+                <KPICard
+                  title="Investimento em Mídia"
+                  value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.metrics.totalSpend)}</span>}
+                  meta="META MENSAL"
+                  metaValue={FORMATTERS.currency(scaledGoals.amountSpent)}
+                  icon={<DollarSign size={16} />}
+                  statusTag={statusMap.amountSpent}
+                  inverseColors={true}
+                />
+                <KPICard
+                  title="Total de Leads"
+                  value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.number(data.metrics.marketingMetrics.leads)}</span>}
+                  meta="META MENSAL"
+                  metaValue={FORMATTERS.number(scaledGoals.leads)}
+                  icon={<RefreshCw size={16} />}
+                  statusTag={statusMap.leads}
+                />
+                <KPICard
+                  title="CPL Médio"
+                  value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.metrics.marketingMetrics.cpl)}</span>}
+                  meta="META CPL"
+                  metaValue={FORMATTERS.currency(scaledGoals.cpl)}
+                  icon={<CplIcon size={16} />}
+                  statusTag={statusMap.cpl}
+                />
               </div>
 
 
@@ -1589,7 +1631,11 @@ const App: React.FC = () => {
 
                 <KPICard
                   title="Quantidade"
-                  value={FORMATTERS.number(data.metrics.totalUnitsSold)}
+                  value={
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter block">
+                      {FORMATTERS.number(data.metrics.totalUnitsSold)}
+                    </span>
+                  }
                   meta="PROGRESSO"
                   metaValue={`Meta: ${FORMATTERS.number(scaledGoals.quantity)} un.`}
                   icon={<ShoppingBag size={16} />}
@@ -1599,7 +1645,11 @@ const App: React.FC = () => {
 
                 <KPICard
                   title="ROI"
-                  value={`${data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x`}
+                  value={
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter block">
+                      {data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x
+                    </span>
+                  }
                   meta="RETORNO SOBRE INVESTIMENTO"
                   metaValue="Multiplicador"
                   icon={<Percent size={16} />}
@@ -1608,7 +1658,11 @@ const App: React.FC = () => {
 
                 <KPICard
                   title="% para Meta"
-                  value={`${scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%`}
+                  value={
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter block">
+                      {scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%
+                    </span>
+                  }
                   meta="PROGRESSO"
                   metaValue={`Meta: ${FORMATTERS.number(scaledGoals.leads)} leads`}
                   icon={<Target size={16} />}
