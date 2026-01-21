@@ -1456,7 +1456,7 @@ const App: React.FC = () => {
                         <span className="text-[10px] sm:text-xs font-medium text-slate-500 cursor-default">{kpi.title}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm sm:text-lg font-semibold text-slate-800 dark:text-white leading-none">{kpi.val}</span>
+                        <span className="text-sm sm:text-base lg:text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">{kpi.val}</span>
                         {kpi.status && <StatusBadge status={kpi.status} />}
                       </div>
                       <div className="mt-1.5 text-[10px] text-slate-400">Meta: {kpi.meta}</div>
@@ -1477,7 +1477,7 @@ const App: React.FC = () => {
                         <span className="text-[10px] sm:text-xs font-medium text-slate-500 cursor-default">{kpi.title}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm sm:text-lg font-semibold text-slate-800 dark:text-white leading-none">{kpi.val}</span>
+                        <span className="text-sm sm:text-base lg:text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">{kpi.val}</span>
                         {kpi.status && <StatusBadge status={kpi.status} />}
                       </div>
                       <div className="mt-1.5 text-[10px] text-slate-400">Meta: {kpi.meta}</div>
