@@ -1081,7 +1081,8 @@ const App: React.FC = () => {
       </aside>
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-6 overflow-auto h-screen custom-scrollbar relative w-full">
-        <div className="max-w-[1200px] mx-auto w-full">
+        <div className="max-w-[1000px] mx-auto w-full">
+          {/* Version: 1.0.1 - Square Layout Update */}
           <header className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
               <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-500 lg:hidden hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex-shrink-0"><Menu size={24} /></button>
