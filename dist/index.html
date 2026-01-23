@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Even Digital - Dashboard Pedrosa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            primary: {
+              DEFAULT: '#3B82F6',
+              50: '#EFF6FF',
+              100: '#DBEAFE',
+              200: '#BFDBFE',
+              300: '#93C5FD',
+              400: '#60A5FA',
+              500: '#3B82F6',
+              600: '#2563EB',
+              700: '#1D4ED8',
+              800: '#1E40AF',
+              900: '#1E3A8A',
+            },
+            success: {
+              DEFAULT: '#10B981',
+              500: '#10B981',
+            },
+            danger: {
+              DEFAULT: '#EF4444',
+              500: '#EF4444',
+            },
+            warning: {
+              DEFAULT: '#F59E0B',
+              500: '#F59E0B',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #F5F5F7;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #E5E7EB;
+      border-radius: 20px;
+    }
+
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #6B7280;
+    }
+
+    /* Card shadows */
+    .card-shadow {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-shadow-hover:hover {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Border radius consistency */
+    .rounded-card {
+      border-radius: 16px;
+    }
+
+    .rounded-element {
+      border-radius: 12px;
+    }
+
+    .rounded-button {
+      border-radius: 8px;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-ClQrG1PJ.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Crs_wUKF.css">
+</head>
+
+<body class="text-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200"
+  style="background-color: #F5F5F7;">
+  <div id="root"></div>
+</body>
+
+</html>
