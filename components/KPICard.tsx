@@ -15,6 +15,7 @@ interface KPICardProps {
   inverseColors?: boolean;
   action?: React.ReactNode;
   statusTag?: KPIStatus;
+  onClick?: () => void;
 }
 
 import { StatusBadge } from '../App';
@@ -29,7 +30,8 @@ export const KPICard: React.FC<KPICardProps> = ({
   trend,
   inverseColors = false,
   action,
-  statusTag
+  statusTag,
+  onClick
 }) => {
   const getIconBgColor = () => {
     if (!statusTag) {
@@ -82,7 +84,10 @@ export const KPICard: React.FC<KPICardProps> = ({
   };
 
   return (
-    <div className={`bg-white dark:bg-slate-800 rounded-xl p-5 card-shadow hover:shadow-md transition-all border border-slate-100 dark:border-slate-700 h-full flex flex-col justify-between ${getAccentClass()}`}>
+    <div
+      onClick={onClick}
+      className={`bg-white dark:bg-slate-800 rounded-xl p-5 card-shadow hover:shadow-md transition-all border border-slate-100 dark:border-slate-700 h-full flex flex-col justify-between ${getAccentClass()} ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
+    >
       <div>
         {/* Header com título e ícone */}
         <div className="flex items-center justify-between mb-3">

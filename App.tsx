@@ -279,6 +279,8 @@ const App: React.FC = () => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [selectedLead, setSelectedLead] = useState<ClientLead | null>(null);
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState<{ isOpen: boolean, title: string, value: string, subValue?: string } | null>(null);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -1608,12 +1610,11 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   <KPICard
                     title="Faturamento"
+                    onClick={() => setIsRevenueModalOpen(true)}
                     value={
-                      <div className="space-y-1">
-                        <span className="text-xl sm:text-2xl font-black tracking-tighter block text-emerald-500">
-                          {FORMATTERS.currency(data.metrics.totalRevenue)}
-                        </span>
-                      </div>
+                      <span className="text-xl sm:text-2xl font-black tracking-tighter block text-emerald-500">
+                        {FORMATTERS.summarized(data.metrics.totalRevenue)}
+                      </span>
                     }
                     meta="RECEITA AGREGADA"
                     metaValue="Total"
@@ -1623,6 +1624,12 @@ const App: React.FC = () => {
 
                   <KPICard
                     title="Ticket Médio"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Ticket Médio",
+                      value: FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0),
+                      subValue: "Valor médio bruto por unidade vendida"
+                    })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
                         {FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
@@ -1635,6 +1642,12 @@ const App: React.FC = () => {
 
                   <KPICard
                     title="Quantidade"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Quantidade de Vendas",
+                      value: FORMATTERS.number(data.metrics.totalUnitsSold),
+                      subValue: `Meta estabelecida: ${FORMATTERS.number(scaledGoals.quantity)} unidades`
+                    })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
                         {FORMATTERS.number(data.metrics.totalUnitsSold)}
@@ -1649,6 +1662,12 @@ const App: React.FC = () => {
 
                   <KPICard
                     title="ROI"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Retorno sobre Investimento (ROI)",
+                      value: `${data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(2) : '0.00'}x`,
+                      subValue: `Baseado em ${FORMATTERS.currency(data.metrics.totalRevenue)} de receita sobre ${FORMATTERS.currency(data.metrics.totalSpend)} investidos`
+                    })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
                         {data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x
@@ -1662,6 +1681,12 @@ const App: React.FC = () => {
 
                   <KPICard
                     title="% para Meta"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Progresso da Meta de Leads",
+                      value: `${scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(2) : '0.00'}%`,
+                      subValue: `${FORMATTERS.number(data.metrics.totalLeads)} leads conquistados de uma meta de ${FORMATTERS.number(scaledGoals.leads)}`
+                    })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
                         {scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%
@@ -1691,6 +1716,12 @@ const App: React.FC = () => {
                       <>
                         <KPICard
                           title="Mensagens Enviadas"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Taxa de Mensagens Enviadas",
+                            value: `${getCumulativePercent('mensagem inicial')}%`,
+                            subValue: "Percentual de leads que receberam o primeiro contato"
+                          })}
                           value={`${getCumulativePercent('mensagem inicial')}%`}
                           meta="TAXA DE CONTATO"
                           metaValue="Leads Contatados"
@@ -1699,6 +1730,12 @@ const App: React.FC = () => {
 
                         <KPICard
                           title="Atendimento"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Taxa de Atendimento",
+                            value: `${getCumulativePercent('em atendimento')}%`,
+                            subValue: "Percentual de leads em processo de qualificação"
+                          })}
                           value={`${getCumulativePercent('em atendimento')}%`}
                           meta="EM ATENDIMENTO"
                           metaValue="Qualificação"
@@ -1707,6 +1744,12 @@ const App: React.FC = () => {
 
                         <KPICard
                           title="Reuniões Marcadas"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Taxa de Reuniões Marcadas",
+                            value: `${getCumulativePercent('reuniao agendada')}%`,
+                            subValue: "Percentual de leads com agendamento confirmado"
+                          })}
                           value={`${getCumulativePercent('reuniao agendada')}%`}
                           meta="AGENDAMENTOS"
                           metaValue="Taxa de Conversão"
@@ -1715,6 +1758,12 @@ const App: React.FC = () => {
 
                         <KPICard
                           title="Reuniões Realizadas"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Taxa de Reuniões Realizadas",
+                            value: `${getCumulativePercent('reuniao realizada')}%`,
+                            subValue: "Percentual de reuniões efetivamente concluídas"
+                          })}
                           value={`${getCumulativePercent('reuniao realizada')}%`}
                           meta="CONCLUÍDAS"
                           metaValue="Efetividade"
@@ -1723,6 +1772,12 @@ const App: React.FC = () => {
 
                         <KPICard
                           title="Vendas"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Taxa de Conversão Final",
+                            value: `${getCumulativePercent('vendas concluidas')}%`,
+                            subValue: "Percentual de leads transformados em clientes"
+                          })}
                           value={`${getCumulativePercent('vendas concluidas')}%`}
                           meta="CONVERSÃO FINAL"
                           metaValue="Taxa de Fechamento"
@@ -2337,6 +2392,79 @@ const App: React.FC = () => {
               </div>
             )
           }
+          {isRevenueModalOpen && data && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-300 font-sans">
+              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsRevenueModalOpen(false)}></div>
+              <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/30 dark:bg-slate-950/20">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-500/10 text-emerald-500 rounded-xl">
+                      <DollarSign size={20} />
+                    </div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-tighter italic">Detalhes do Faturamento</h2>
+                  </div>
+                  <button onClick={() => setIsRevenueModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-colors"><X size={20} /></button>
+                </div>
+                <div className="p-10 text-center space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 opacity-60">Valor Real em Conta</p>
+                  <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-emerald-500 tracking-tighter break-words tabular-nums">
+                    {FORMATTERS.currency(data.metrics.totalRevenue)}
+                  </h3>
+                  <div className="pt-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-wider italic">
+                      <TrendingUp size={12} /> Performance de Vendas Concluídas
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 bg-slate-50/50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => setIsRevenueModalOpen(false)}
+                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-xs font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-lg active:scale-[0.98]"
+                  >
+                    Fechar Detalhes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isMetricModalOpen?.isOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-300 font-sans">
+              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsMetricModalOpen(null)}></div>
+              <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/30 dark:bg-slate-950/20">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-xl">
+                      <BarChart3 size={20} />
+                    </div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-tighter italic">{isMetricModalOpen.title}</h2>
+                  </div>
+                  <button onClick={() => setIsMetricModalOpen(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-colors"><X size={20} /></button>
+                </div>
+                <div className="p-10 text-center space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 opacity-60">Valor Detalhado</p>
+                  <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white tracking-tighter break-words tabular-nums">
+                    {isMetricModalOpen.value}
+                  </h3>
+                  {isMetricModalOpen.subValue && (
+                    <div className="pt-6">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase tracking-wider italic">
+                        {isMetricModalOpen.subValue}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="p-6 bg-slate-50/50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => setIsMetricModalOpen(null)}
+                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-xs font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-lg active:scale-[0.98]"
+                  >
+                    Fechar Detalhes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main >
     </div >

@@ -47,4 +47,14 @@ export const FORMATTERS = {
     minimumFractionDigits: 1,
     maximumFractionDigits: 2
   }).format(value / 100),
+
+  summarized: (value: number) => {
+    if (value >= 1_000_000) {
+      return (value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' milhões';
+    }
+    if (value >= 1_000) {
+      return (value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+    }
+    return value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  },
 };
