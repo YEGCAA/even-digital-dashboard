@@ -354,7 +354,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         email: String(findValue(row, ["email", "e-mail", "mail"]) || "Sem E-mail"),
         phone: String(findValue(row, ["telefone", "phone", "whatsapp", "celular"]) || "---"),
         businessTitle: String(findValue(row, ["titulo do negocio", "negocio", "deal title", "business"]) || "---"),
-        pipeline: String(findValue(row, ["pipeline", "funil", "board", "Pipeline"]) || "Padrão"),
+        // Pipeline baseado na presença de status_venda_2
+        pipeline: statusVendaRaw ? "High Contorno" : "Reserva do Sal",
         stage: isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa")),
         stageId: stageId,
         quantity: multiplier,
@@ -417,12 +418,12 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
           email: "---",
           phone: "---",
           businessTitle: vNome,
-          pipeline: "Importado",
+          pipeline: "Reserva do Sal", // Leads da tabela valores são Reserva do Sal
           stage: "Vendas Concluidas",
           stageId: "14",
           quantity: 1,
           date: syncDate,
-          statusVenda2: "Ganho",
+          statusVenda2: "", // Sem status_venda_2 para ser Reserva do Sal
           value: vValor
         });
       }
