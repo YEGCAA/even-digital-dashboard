@@ -662,8 +662,8 @@ const App: React.FC = () => {
             Quantidade: goals.quantity.value,
             Mensagens_Enviadas: goals.mensagensEnviadas.value,
             Atendimento: goals.atendimento.value,
-            Reuniao_Marcada: goals.reuniaoMarcada.value,
-            Reuniao_Realizada: goals.reuniaoRealizada.value,
+            Reunioes_Marcadas: goals.reuniaoMarcada.value,
+            Reunioes_Realizadas: goals.reuniaoRealizada.value,
             Vendas: goals.vendas.value
           })
           .eq('id', idToUpdate)
@@ -778,7 +778,57 @@ const App: React.FC = () => {
       ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better'),
       cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better'),
       frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better'),
-      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better')
+      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better'),
+      mensagensEnviadas: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'mensageminicial'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.mensagensEnviadas, 'higher-better');
+      })(),
+      atendimento: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'ematendimento'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.atendimento, 'higher-better');
+      })(),
+      reuniaoMarcada: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'reuniaoagendada'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.reuniaoMarcada, 'higher-better');
+      })(),
+      reuniaoRealizada: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'reuniaorealizada'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.reuniaoRealizada, 'higher-better');
+      })(),
+      vendas: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'vendasconcluidas'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better');
+      })()
     };
   }, [data, scaledGoals]);
 
@@ -2009,12 +2059,13 @@ ${JSON.stringify(tabData, null, 2)}`
                             isOpen: true,
                             title: "Taxa de Mensagens Enviadas",
                             value: `${getCumulativePercent('mensagem inicial')}%`,
-                            subValue: "Percentual de leads que receberam o primeiro contato"
+                            subValue: `Percentual de leads que receberam o primeiro contato. Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('mensagem inicial')}%`}
                           meta="TAXA DE CONTATO"
-                          metaValue="Leads Contatados"
+                          metaValue={`Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%`}
                           icon={<Mail size={16} />}
+                          statusTag={statusMap.mensagensEnviadas}
                         />
 
                         <KPICard
@@ -2023,12 +2074,13 @@ ${JSON.stringify(tabData, null, 2)}`
                             isOpen: true,
                             title: "Taxa de Atendimento",
                             value: `${getCumulativePercent('em atendimento')}%`,
-                            subValue: "Percentual de leads em processo de qualificação"
+                            subValue: `Percentual de leads em processo de qualificação. Meta: ${scaledGoals.atendimento.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('em atendimento')}%`}
                           meta="EM ATENDIMENTO"
-                          metaValue="Qualificação"
+                          metaValue={`Meta: ${scaledGoals.atendimento.toFixed(1)}%`}
                           icon={<Users size={16} />}
+                          statusTag={statusMap.atendimento}
                         />
 
                         <KPICard
@@ -2037,12 +2089,13 @@ ${JSON.stringify(tabData, null, 2)}`
                             isOpen: true,
                             title: "Taxa de Reuniões Marcadas",
                             value: `${getCumulativePercent('reuniao agendada')}%`,
-                            subValue: "Percentual de leads com agendamento confirmado"
+                            subValue: `Percentual de leads com agendamento confirmado. Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('reuniao agendada')}%`}
                           meta="AGENDAMENTOS"
-                          metaValue="Taxa de Conversão"
+                          metaValue={`Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%`}
                           icon={<Calendar size={16} />}
+                          statusTag={statusMap.reuniaoMarcada}
                         />
 
                         <KPICard
@@ -2051,12 +2104,13 @@ ${JSON.stringify(tabData, null, 2)}`
                             isOpen: true,
                             title: "Taxa de Reuniões Realizadas",
                             value: `${getCumulativePercent('reuniao realizada')}%`,
-                            subValue: "Percentual de reuniões efetivamente concluídas"
+                            subValue: `Percentual de reuniões efetivamente concluídas. Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('reuniao realizada')}%`}
                           meta="CONCLUÍDAS"
-                          metaValue="Efetividade"
+                          metaValue={`Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%`}
                           icon={<Check size={16} />}
+                          statusTag={statusMap.reuniaoRealizada}
                         />
 
                         <KPICard
@@ -2065,12 +2119,13 @@ ${JSON.stringify(tabData, null, 2)}`
                             isOpen: true,
                             title: "Taxa de Conversão Final",
                             value: `${getCumulativePercent('vendas concluidas')}%`,
-                            subValue: "Percentual de leads transformados em clientes"
+                            subValue: `Percentual de leads transformados em clientes. Meta: ${scaledGoals.vendas.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('vendas concluidas')}%`}
                           meta="CONVERSÃO FINAL"
-                          metaValue="Taxa de Fechamento"
+                          metaValue={`Meta: ${scaledGoals.vendas.toFixed(1)}%`}
                           icon={<Trophy size={16} />}
+                          statusTag={statusMap.vendas}
                           trend="up"
                         />
                       </>
