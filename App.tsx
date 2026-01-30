@@ -279,6 +279,9 @@ const App: React.FC = () => {
   const [selectedStage, setSelectedStage] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedVendaStatus, setSelectedVendaStatus] = useState<string[]>([]);
+  const [selectedPipelines, setSelectedPipelines] = useState<string[]>([]); // Novo filtro de Pipeline
+  const [isSalesPipelineDropdownOpen, setIsSalesPipelineDropdownOpen] = useState(false);
+  const pipelineRef = useRef<HTMLDivElement>(null);
 
   const [retentionSortOrder, setRetentionSortOrder] = useState<'default' | 'highest'>('default');
 
@@ -490,7 +493,10 @@ const App: React.FC = () => {
     // Extract venda status from leads
     const vendaStatus = Array.from(new Set((baseData.leadsList || []).map(lead => lead.statusVenda2).filter(Boolean))).sort() as string[];
 
-    return { campaigns, adSets, ads, tags, vendaStatus };
+    // Extract pipelines from leads
+    const pipelines = Array.from(new Set((baseData.leadsList || []).map(lead => lead.pipeline).filter(Boolean))).sort() as string[];
+
+    return { campaigns, adSets, ads, tags, vendaStatus, pipelines };
   }, [baseData, selectedCampaigns, selectedAdSets]);
 
   // Unified effect for filter animation
@@ -1059,9 +1065,12 @@ const App: React.FC = () => {
       const matchesVendaStatus = selectedVendaStatus.length === 0
         ? (!isLost && !isWon)
         : (lead.statusVenda2 && selectedVendaStatus.includes(lead.statusVenda2));
-      return matchesSearch && matchesStage && matchesTags && matchesVendaStatus;
+
+      const matchesPipeline = selectedPipelines.length === 0 || selectedPipelines.includes(lead.pipeline);
+      return matchesSearch && matchesStage && matchesTags && matchesVendaStatus && matchesPipeline;
     });
-  }, [data, salesSearch, selectedStage, selectedTags, selectedVendaStatus]);
+  }, [data, salesSearch, selectedStage, selectedTags, selectedVendaStatus, selectedPipelines]);
+
 
   const toggleFilter = (list: string[], setList: (l: string[]) => void, item: string) => {
     if (item === "__ALL__") { setList([]); return; }
@@ -2144,8 +2153,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <FilterDropdown title="Etiquetas" options={filterOptions.tags} selected={selectedTags} onToggle={(i: any) => toggleFilter(selectedTags, setSelectedTags, i)} isOpen={isSalesTagDropdownOpen} setIsOpen={setIsSalesTagDropdownOpen} icon={Grid} dropdownRef={tagRef} />
                     <FilterDropdown title="Status Venda" options={filterOptions.vendaStatus} selected={selectedVendaStatus} onToggle={(i: any) => toggleFilter(selectedVendaStatus, setSelectedVendaStatus, i)} isOpen={isSalesVendaStatusDropdownOpen} setIsOpen={setIsSalesVendaStatusDropdownOpen} icon={Activity} dropdownRef={vendaStatusRef} allLabel="Atual" />
-                    {/* Empty space to align with the 3 columns above if needed, or leave it flex */}
-                    <div className="hidden lg:block flex-1"></div>
+                    <FilterDropdown title="Pipeline" options={filterOptions.pipelines || []} selected={selectedPipelines} onToggle={(i: any) => toggleFilter(selectedPipelines, setSelectedPipelines, i)} isOpen={isSalesPipelineDropdownOpen} setIsOpen={setIsSalesPipelineDropdownOpen} icon={Briefcase} dropdownRef={pipelineRef} />
                   </div>
 
                   <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
