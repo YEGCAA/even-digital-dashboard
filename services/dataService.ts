@@ -345,30 +345,37 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
             .map(t => t.trim())
             .filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
         }
-
-        // Only set tags if there are valid tags after filtering
-        if (tags && tags.length === 0) {
-          tags = undefined;
-        }
-
-        console.log('Tags processadas:', tags);
       }
 
-      // Determinar pipeline baseado APENAS em id pipeline
-      // Reserva do Sal: id pipeline = 3
-      // High Contorno: qualquer outro id pipeline (incluindo vazio)
-      const isReservaSal = pipelineId === "3";
-      const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
+      // Only set tags if there are valid tags after filtering
+      if (tags && tags.length === 0) {
+        tags = undefined;
+      }
+
+      console.log('Tags processadas:', tags);
+
+      // Determinar pipeline baseado no NOME do campo pipeline
+      // Reserva do Sal: campo pipeline contém "reserva"
+      // High Contorno: qualquer outro valor (incluindo vazio, "High Contorno", null, etc.)
+      // PADRÃO: Se não conseguir identificar → High Contorno
+      const pipelineNorm = normalizeStr(pipelineName);
+      const isReservaSal = pipelineNorm.includes("reserva");
+
+      // VENDAS CONCLUÍDAS são SEMPRE High Contorno
+      const finalPipeline = isVendaConcluida ? "High Contorno" : (isReservaSal ? "Reserva do Sal" : "High Contorno");
 
       // Determinar estágio final
       const finalStage = isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa"));
 
       // Debug log - mostrar mais leads de Reserva do Sal
-      if (isReservaSal && index < 20) {
-        console.log(`[RESERVA] Lead: ${leadName} | Estágio: "${finalStage}" | ID Pipeline: "${pipelineId}" | Status Venda: "${statusVendaRaw}"`);
+      if (isReservaSal && !isVendaConcluida && index < 20) {
+        console.log(`[RESERVA] Lead: ${leadName} | Estágio: "${finalStage}" | Pipeline Name: "${pipelineName}" | ID: "${pipelineId}"`);
       }
       if (!isReservaSal && index < 5) {
-        console.log(`[HIGH] Lead: ${leadName} | Estágio: "${finalStage}" | ID Pipeline: "${pipelineId}" | Status Venda: "${statusVendaRaw}"`);
+        console.log(`[HIGH] Lead: ${leadName} | Estágio: "${finalStage}" | Pipeline Name: "${pipelineName}" | ID: "${pipelineId}"`);
+      }
+      if (isVendaConcluida && index < 10) {
+        console.log(`[VENDA] Lead: ${leadName} | Pipeline: ${finalPipeline} (sempre High) | Pipeline Original: "${pipelineName}"`);
       }
 
       leadsList.push({
