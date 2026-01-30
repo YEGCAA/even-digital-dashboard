@@ -354,12 +354,16 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         console.log('Tags processadas:', tags);
       }
 
-      // Determinar pipeline baseado em id pipeline e nome
-      // Reserva do Sal: id pipeline = 3 OU pipeline name contém "reserva"
-      // High Contorno: todos os outros
-      const pipelineNorm = normalizeStr(pipelineName);
-      const isReservaSal = pipelineId === "3" || pipelineNorm.includes("reserva");
+      // Determinar pipeline baseado APENAS em id pipeline
+      // Reserva do Sal: id pipeline = 3
+      // High Contorno: qualquer outro id pipeline (incluindo vazio)
+      const isReservaSal = pipelineId === "3";
       const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
+
+      // Debug log
+      if (index < 5) {
+        console.log(`[PIPELINE] Lead: ${leadName} | ID Pipeline: "${pipelineId}" | Nome Pipeline: "${pipelineName}" | Classificado: ${finalPipeline}`);
+      }
 
       leadsList.push({
         id: `lead-${index}-${Math.random().toString(36).substr(2, 9)}`,
