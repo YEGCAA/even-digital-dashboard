@@ -2260,7 +2260,10 @@ ${JSON.stringify(tabData, null, 2)}`
                           const matchesVendaStatus = selectedVendaStatus.length === 0 ||
                             (lead.statusVenda2 && selectedVendaStatus.includes(lead.statusVenda2));
 
-                          return matchesSearch && matchesTags && matchesVendaStatus;
+                          const matchesPipeline = selectedPipelines.length === 0 ||
+                            selectedPipelines.includes(lead.pipeline);
+
+                          return matchesSearch && matchesTags && matchesVendaStatus && matchesPipeline;
                         });
                         const percentage = data.funnelData[0]?.count ? ((stage.count / data.funnelData[0].count) * 100).toFixed(1) : '0';
 
