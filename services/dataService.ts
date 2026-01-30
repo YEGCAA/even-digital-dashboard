@@ -68,10 +68,10 @@ const findValue = (row: any, keys: string[]) => {
 
 const PREFERRED_ORDER = [
   "entrada do lead",
-  "qualificado",
   "mensagem inicial",
   "tentativa de contato",
   "em atendimento",
+  "qualificado",
   "lead futuro",
   "pre agendamento",
   "reuniao agendada",
