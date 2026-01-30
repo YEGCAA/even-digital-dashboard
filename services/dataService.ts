@@ -363,28 +363,26 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
       console.log('Tags processadas:', tags);
 
-      // LÓGICA DE PIPELINE:
-      // RESERVA DO SAL: pipeline contém "reserva" E id pipeline = 3
-      // HIGH CONTORNO: TUDO MAIS (valores_2, status_venda_2, outros)
+      // LÓGICA RÍGIDA PEDIDA: "Reserva do Sal so vai ser pra quem ta escrito Reserva do Sal e o ID da Pipeline 3"
       const pipelineNorm = normalizeStr(pipelineName);
       const hasReservaName = pipelineNorm.includes("reserva");
       const hasReservaId = String(pipelineId).trim() === "3";
 
-      // Conforme pedido: "todos que vem de ... status_venda2 são do high contorno"
+      // Se tem status de venda ou vem de valores_2, vai pro High Contorno. 
+      // Caso contrário, se for ID 3 + Nome, vai pra Reserva.
       const isReservaSal = hasReservaName && hasReservaId && !statusVendaRaw;
 
-      // TUDO vai para High Contorno, exceto Reserva do Sal
       const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
 
       // Determinar estágio final
       const finalStage = isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa"));
 
-      // Debug log
-      if (isReservaSal && index < 20) {
-        console.log(`[RESERVA] ${finalLeadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}"`);
+      // Debug log específico para Marcelo ou qualquer Reserva
+      if (finalLeadName.includes("Marcelo Santana") || (isReservaSal && index < 20)) {
+        console.log(`[PIPELINE_DEBUG] ${finalLeadName} | Pipeline: "${pipelineName}" | ID_Pipe: "${pipelineId}" | Status: "${statusVendaRaw}" | Final: ${finalPipeline} | Estágio: ${finalStage}`);
       }
-      if (!isReservaSal && index < 10) {
-        console.log(`[HIGH] ${finalLeadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}" | Status: "${statusVendaRaw}"`);
+      if (!isReservaSal && index < 3) {
+        console.log(`[HIGH] ${finalLeadName} | Final: ${finalPipeline}`);
       }
 
       leadsList.push({
