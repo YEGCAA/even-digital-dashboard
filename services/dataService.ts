@@ -240,6 +240,12 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const statusVendaRaw = cleanStatusStr(statusVendaVal);
     const statusVendaNorm = normalizeStr(statusVendaRaw);
 
+    // Extrair informações de pipeline
+    const pipelineIdRaw = findValue(row, ["id pipeline", "ID Pipeline", "id_pipeline", "pipeline_id"]);
+    const pipelineId = pipelineIdRaw ? String(pipelineIdRaw).trim() : "";
+    const pipelineNameRaw = findValue(row, ["pipeline", "Pipeline", "funil", "board"]);
+    const pipelineName = pipelineNameRaw ? String(pipelineNameRaw).trim() : "";
+
     const leadName = findValue(row, ["nome", "name", "cliente", "customer name", "lead"]);
     const rowQty = parseNumeric(findValue(row, ["quantidade", "qtd", "units_sold", "volume", "unid", "unidades"]));
     const multiplier = rowQty > 0 ? rowQty : 1;
@@ -348,14 +354,20 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         console.log('Tags processadas:', tags);
       }
 
+      // Determinar pipeline baseado em id pipeline e nome
+      // Reserva do Sal: id pipeline = 3 OU pipeline name contém "reserva"
+      // High Contorno: todos os outros
+      const pipelineNorm = normalizeStr(pipelineName);
+      const isReservaSal = pipelineId === "3" || pipelineNorm.includes("reserva");
+      const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
+
       leadsList.push({
         id: `lead-${index}-${Math.random().toString(36).substr(2, 9)}`,
         name: String(leadName) || "Sem Nome",
         email: String(findValue(row, ["email", "e-mail", "mail"]) || "Sem E-mail"),
         phone: String(findValue(row, ["telefone", "phone", "whatsapp", "celular"]) || "---"),
         businessTitle: String(findValue(row, ["titulo do negocio", "negocio", "deal title", "business"]) || "---"),
-        // Pipeline baseado na presença de status_venda_2
-        pipeline: statusVendaRaw ? "High Contorno" : "Reserva do Sal",
+        pipeline: finalPipeline,
         stage: isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa")),
         stageId: stageId,
         quantity: multiplier,
