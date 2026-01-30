@@ -52,9 +52,23 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
 
             // Normalize date to YYYY-MM-DD for aggregation
             try {
-                const d = new Date(dateVal);
-                if (isNaN(d.getTime())) return;
-                const key = d.toISOString().split('T')[0];
+                // Extrair apenas a parte da data (YYYY-MM-DD) sem conversão de timezone
+                let key: string;
+                const dateStr = String(dateVal);
+
+                // Se já está no formato YYYY-MM-DD, usar diretamente
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                    key = dateStr;
+                } else {
+                    // Caso contrário, converter mas usar apenas a parte da data local
+                    const d = new Date(dateVal);
+                    if (isNaN(d.getTime())) return;
+                    // Usar getFullYear, getMonth, getDate para evitar timezone issues
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    key = `${year}-${month}-${day}`;
+                }
 
                 // Find metrics using robust matching
                 const leadsRaw = getRowVal(row, ['leads', 'lead count', 'leads_gerados', 'results', 'cadastro_realizado']);
@@ -76,17 +90,22 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
 
         return Object.values(dailyStats)
             .filter(item => {
-                // Aplicar filtro de data se fornecido
+                // Aplicar filtro de data se fornecido - COMPARAÇÃO EXATA DE STRINGS
                 if (startDate && item.date < startDate) return false;
                 if (endDate && item.date > endDate) return false;
                 return true;
             })
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(item => ({
-                ...item,
-                cpl: item.leads > 0 ? item.spend / item.leads : 0,
-                formattedDate: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-            }));
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map(item => {
+                // Formatar data sem timezone issues
+                const [year, month, day] = item.date.split('-');
+                const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                return {
+                    ...item,
+                    cpl: item.leads > 0 ? item.spend / item.leads : 0,
+                    formattedDate: d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+                };
+            });
     }, [data, startDate, endDate]);
 
     if (chartData.length === 0) {
@@ -105,7 +124,7 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
             <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                     data={chartData}
-                    margin={{ top: 20, right: 20, bottom: 40, left: 20 }} // Increased bottom margin
+                    margin={{ top: 20, right: 20, bottom: 40, left: 20 }}
                 >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis
@@ -148,7 +167,6 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
                         wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
                     />
 
-                    {/* Leads Bar - Eixo Esquerdo (Volume) */}
                     <Bar
                         yAxisId="left"
                         dataKey="leads"
@@ -158,7 +176,6 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
                         barSize={20}
                     />
 
-                    {/* CPL Bar - Eixo Direito (Valor R$) */}
                     <Bar
                         yAxisId="right"
                         dataKey="cpl"
@@ -168,7 +185,6 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
                         barSize={20}
                     />
 
-                    {/* Spend Line - Eixo Direito (Valor R$) */}
                     <Line
                         yAxisId="right"
                         type="monotone"
