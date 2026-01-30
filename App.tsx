@@ -408,10 +408,10 @@ const App: React.FC = () => {
               cpm: { value: latest.CPM || 0, mode: 'fixed' },
               frequency: { value: latest.Frequência || 0, mode: 'fixed' },
               quantity: { value: latest.Quantidade || 0, mode: 'monthly' },
-              mensagensEnviadas: { value: latest['Mensagens Enviadas'] || 0, mode: 'monthly' },
+              mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'monthly' },
               atendimento: { value: latest.Atendimento || 0, mode: 'monthly' },
-              reuniaoMarcada: { value: latest['Reunião Marcada'] || 0, mode: 'monthly' },
-              reuniaoRealizada: { value: latest['Reunião Realizada'] || 0, mode: 'monthly' },
+              reuniaoMarcada: { value: latest.Reunioes_Marcadas || 0, mode: 'monthly' },
+              reuniaoRealizada: { value: latest.Reunioes_Realizadas || 0, mode: 'monthly' },
               vendas: { value: latest.Vendas || 0, mode: 'monthly' }
             });
           }
@@ -613,10 +613,10 @@ const App: React.FC = () => {
             CPM: goals.cpm.value,
             Frequência: goals.frequency.value,
             Quantidade: goals.quantity.value,
-            'Mensagens Enviadas': goals.mensagensEnviadas.value,
+            Mensagens_Enviadas: goals.mensagensEnviadas.value,
             Atendimento: goals.atendimento.value,
-            'Reunião Marcada': goals.reuniaoMarcada.value,
-            'Reunião Realizada': goals.reuniaoRealizada.value,
+            Reunioes_Marcadas: goals.reuniaoMarcada.value,
+            Reunioes_Realizadas: goals.reuniaoRealizada.value,
             Vendas: goals.vendas.value
           }])
           .select();
@@ -660,10 +660,10 @@ const App: React.FC = () => {
             CPM: goals.cpm.value,
             Frequência: goals.frequency.value,
             Quantidade: goals.quantity.value,
-            'Mensagens Enviadas': goals.mensagensEnviadas.value,
+            Mensagens_Enviadas: goals.mensagensEnviadas.value,
             Atendimento: goals.atendimento.value,
-            'Reunião Marcada': goals.reuniaoMarcada.value,
-            'Reunião Realizada': goals.reuniaoRealizada.value,
+            Reuniao_Marcada: goals.reuniaoMarcada.value,
+            Reuniao_Realizada: goals.reuniaoRealizada.value,
             Vendas: goals.vendas.value
           })
           .eq('id', idToUpdate)
@@ -694,10 +694,10 @@ const App: React.FC = () => {
       cpm: { value: row.CPM || 0, mode: 'fixed' },
       frequency: { value: row.Frequência || 0, mode: 'fixed' },
       quantity: { value: row.Quantidade || 0, mode: 'monthly' },
-      mensagensEnviadas: { value: row['Mensagens Enviadas'] || 0, mode: 'monthly' },
+      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: 'monthly' },
       atendimento: { value: row.Atendimento || 0, mode: 'monthly' },
-      reuniaoMarcada: { value: row['Reunião Marcada'] || 0, mode: 'monthly' },
-      reuniaoRealizada: { value: row['Reunião Realizada'] || 0, mode: 'monthly' },
+      reuniaoMarcada: { value: row.Reunioes_Marcadas || 0, mode: 'monthly' },
+      reuniaoRealizada: { value: row.Reunioes_Realizadas || 0, mode: 'monthly' },
       vendas: { value: row.Vendas || 0, mode: 'monthly' }
     };
     setGoals(newGoals);
