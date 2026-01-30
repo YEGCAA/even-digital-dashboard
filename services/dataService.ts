@@ -241,9 +241,9 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const statusVendaNorm = normalizeStr(statusVendaRaw);
 
     // Extrair informações de pipeline
-    const pipelineIdRaw = findValue(row, ["id pipeline", "ID Pipeline", "id_pipeline", "pipeline_id"]);
+    const pipelineIdRaw = findValue(row, ["id pipeline", "ID Pipeline", "id_funil", "ID Funil", "id_pipeline", "pipeline_id", "funil_id"]);
     const pipelineId = pipelineIdRaw ? String(pipelineIdRaw).trim() : "";
-    const pipelineNameRaw = findValue(row, ["pipeline", "Pipeline", "funil", "board"]);
+    const pipelineNameRaw = findValue(row, ["pipeline", "Pipeline", "funil", "board", "funil_nome", "nome_funil"]);
     const pipelineName = pipelineNameRaw ? String(pipelineNameRaw).trim() : "";
 
     const leadName = findValue(row, ["nome", "name", "cliente", "customer name", "lead"]);
@@ -280,10 +280,15 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       if (!matchedStage) {
         if (stageNorm.includes("reuniaomarcada") || (stageNorm.includes("reuniao") && stageNorm.includes("marcad"))) {
           matchedStage = "reuniao agendada";
-        } else if (stageNorm.includes("contato") || stageNorm.includes("mensagem")) {
-          // Fallback for contact stages
-          if (stageNorm.includes("inicial")) matchedStage = "mensagem inicial";
-          else matchedStage = "tentativa de contato";
+        } else if (stageNorm.includes("contato") || stageNorm.includes("mensagem") || stageNorm.includes("abordagem")) {
+          // Mais inclusivo para Mensagem Inicial
+          if (stageNorm.includes("inicial") || stageNorm.includes("primeira") || stageNorm.includes("mensagem")) {
+            matchedStage = "mensagem inicial";
+          } else {
+            matchedStage = "tentativa de contato";
+          }
+        } else if (stageNorm.includes("novo") || stageNorm.includes("leads") || stageNorm.includes("entrada") || stageNorm.includes("recebid")) {
+          matchedStage = "entrada do lead";
         }
       }
 
@@ -313,8 +318,12 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     }
 
 
-    if (leadName) {
+    if (true) { // Incluir leads mesmo sem nome
+      const finalLeadName = String(leadName || findValue(row, ["email", "telefone"]) || "Lead Sem Nome").trim();
+
       // Get tags if available - try multiple possible field names
+      let tags: string[] | undefined;
+
       const tagsRaw = findValue(row, [
         "tags",
         "etiquetas",
@@ -329,7 +338,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         "classificacao",
         "classification"
       ]);
-      let tags: string[] | undefined;
+
 
       if (tagsRaw) {
         console.log('Tags encontradas para', leadName, ':', tagsRaw);
@@ -372,15 +381,15 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
       // Debug log
       if (isReservaSal && index < 20) {
-        console.log(`[RESERVA] ${leadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}"`);
+        console.log(`[RESERVA] ${finalLeadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}"`);
       }
       if (!isReservaSal && index < 10) {
-        console.log(`[HIGH] ${leadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}" | Status: "${statusVendaRaw}"`);
+        console.log(`[HIGH] ${finalLeadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}" | Status: "${statusVendaRaw}"`);
       }
 
       leadsList.push({
         id: `lead-${index}-${Math.random().toString(36).substr(2, 9)}`,
-        name: String(leadName) || "Sem Nome",
+        name: finalLeadName,
         email: String(findValue(row, ["email", "e-mail", "mail"]) || "Sem E-mail"),
         phone: String(findValue(row, ["telefone", "phone", "whatsapp", "celular"]) || "---"),
         businessTitle: String(findValue(row, ["titulo do negocio", "negocio", "deal title", "business"]) || "---"),
