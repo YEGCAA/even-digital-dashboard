@@ -354,28 +354,28 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
       console.log('Tags processadas:', tags);
 
-      // Determinar pipeline baseado no NOME do campo pipeline
-      // Reserva do Sal: campo pipeline contém "reserva"
-      // High Contorno: qualquer outro valor (incluindo vazio, "High Contorno", null, etc.)
-      // PADRÃO: Se não conseguir identificar → High Contorno
+      // LÓGICA DE PIPELINE:
+      // RESERVA DO SAL: pipeline contém "reserva" E id pipeline = 3
+      // HIGH CONTORNO: TUDO MAIS (valores_2, status_venda_2, outros)
       const pipelineNorm = normalizeStr(pipelineName);
-      const isReservaSal = pipelineNorm.includes("reserva");
+      const hasReservaName = pipelineNorm.includes("reserva");
+      const hasReservaId = String(pipelineId).trim() === "3";
 
-      // VENDAS CONCLUÍDAS são SEMPRE High Contorno
-      const finalPipeline = isVendaConcluida ? "High Contorno" : (isReservaSal ? "Reserva do Sal" : "High Contorno");
+      // Conforme pedido: "todos que vem de ... status_venda2 são do high contorno"
+      const isReservaSal = hasReservaName && hasReservaId && !statusVendaRaw;
+
+      // TUDO vai para High Contorno, exceto Reserva do Sal
+      const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
 
       // Determinar estágio final
       const finalStage = isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa"));
 
-      // Debug log - mostrar mais leads de Reserva do Sal
-      if (isReservaSal && !isVendaConcluida && index < 20) {
-        console.log(`[RESERVA] Lead: ${leadName} | Estágio: "${finalStage}" | Pipeline Name: "${pipelineName}" | ID: "${pipelineId}"`);
+      // Debug log
+      if (isReservaSal && index < 20) {
+        console.log(`[RESERVA] ${leadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}"`);
       }
-      if (!isReservaSal && index < 5) {
-        console.log(`[HIGH] Lead: ${leadName} | Estágio: "${finalStage}" | Pipeline Name: "${pipelineName}" | ID: "${pipelineId}"`);
-      }
-      if (isVendaConcluida && index < 10) {
-        console.log(`[VENDA] Lead: ${leadName} | Pipeline: ${finalPipeline} (sempre High) | Pipeline Original: "${pipelineName}"`);
+      if (!isReservaSal && index < 10) {
+        console.log(`[HIGH] ${leadName} | Estágio: "${finalStage}" | Pipeline: "${pipelineName}" | ID: "${pipelineId}" | Status: "${statusVendaRaw}"`);
       }
 
       leadsList.push({
@@ -419,8 +419,13 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   totalSalesValue = 0;
   countVendasID14 = 0;
   stageCounts["Vendas Concluidas"] = 0;
-  // Removemos qualquer lead que o CRM tenha marcado como venda concluída (ID 14) da lista geral
-  leadsList = leadsList.filter(l => l.stage !== "Vendas Concluidas" && l.stageId !== "14");
+  // Removemos qualquer lead de HIGH CONTORNO que o CRM tenha marcado como venda concluída (ID 14) 
+  // para serem substituídos pela tabela valores. Leads de RESERVA DO SAL são mantidos.
+  leadsList = leadsList.filter(l => {
+    const isConcluida = l.stage === "Vendas Concluidas" || l.stageId === "14";
+    if (isConcluida && l.pipeline === "High Contorno") return false;
+    return true;
+  });
 
 
   valoresRows.forEach((row, vIndex) => {
@@ -447,12 +452,12 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
           email: "---",
           phone: "---",
           businessTitle: vNome,
-          pipeline: "Reserva do Sal", // Leads da tabela valores são Reserva do Sal
+          pipeline: "High Contorno", // Leads da tabela valores são High Contorno
           stage: "Vendas Concluidas",
           stageId: "14",
           quantity: 1,
           date: syncDate,
-          statusVenda2: "", // Sem status_venda_2 para ser Reserva do Sal
+          statusVenda2: "ganho", // Sem status_venda_2 para ser Reserva do Sal (Wait, user said High Contorno for status_venda_2 too)
           value: vValor
         });
       }
