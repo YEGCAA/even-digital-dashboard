@@ -46,12 +46,19 @@ const findValue = (row: any, keys: string[]) => {
   if (!row) return null;
   const rowKeys = Object.keys(row);
 
+  // First pass: look for exact matches after normalization
   for (const key of keys) {
     const normalizedSearchKey = normalizeStr(key);
-    const found = rowKeys.find(rk => {
-      const normalizedRowKey = normalizeStr(rk);
-      return normalizedRowKey === normalizedSearchKey || normalizedRowKey.includes(normalizedSearchKey);
-    });
+    const found = rowKeys.find(rk => normalizeStr(rk) === normalizedSearchKey);
+    if (found && row[found] !== null && row[found] !== "" && row[found] !== undefined) {
+      return row[found];
+    }
+  }
+
+  // Second pass: look for partial matches (as fallback)
+  for (const key of keys) {
+    const normalizedSearchKey = normalizeStr(key);
+    const found = rowKeys.find(rk => normalizeStr(rk).includes(normalizedSearchKey));
     if (found && row[found] !== null && row[found] !== "" && row[found] !== undefined) {
       return row[found];
     }
@@ -169,7 +176,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const spend = parseNumeric(findValue(row, ["Amount Spent", "investimento", "valor gasto", "custo", "gastos", "spent"]));
     totalSpend += spend;
 
-    const leads = parseNumeric(findValue(row, ["leads", "lead count", "leads_gerados", "results", "resultados", "leads fb", "leads google"]));
+    const leads = parseNumeric(findValue(row, ["Leads", "lead count", "leads_gerados", "results", "resultados", "leads fb", "leads google"]));
     totalMarketingLeads += leads;
 
     totalReach += parseNumeric(findValue(row, ["Reach", "Alcance"]));
@@ -425,9 +432,11 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   // O total de Leads Geral (Overview) vem do CRM
   const realTotalLeads = leadsList.length;
 
-  // No Marketing, o CPL é baseado nos leads REPORTADOS pelas plataformas quando houver filtros,
-  // mas se não houver filtro, usamos os leads de marketing capturados.
-  const leadsForMarketingCalculations = totalMarketingLeads > 0 ? totalMarketingLeads : realTotalLeads;
+  // No Marketing, o CPL e outras métricas devem usar estritamente os leads reportados pela tabela de marketing (ex: marketing_2)
+  // Isso garante que filtros de campanha mostrem apenas os leads daquela campanha.
+  // Só usamos realTotalLeads (CRM) como fallback se não houver dados nenhuns de marketing carregados.
+  const hasMarketingData = marketingRows.length > 0;
+  const leadsForMarketingCalculations = hasMarketingData ? totalMarketingLeads : realTotalLeads;
 
   const averageCPL = leadsForMarketingCalculations > 0 ? totalSpend / leadsForMarketingCalculations : 0;
   const averageCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;

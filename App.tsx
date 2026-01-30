@@ -13,7 +13,7 @@ import {
   Terminal, Code, Clipboard,
   Play, Video, Activity, Trash2,
   BarChart as VerticalBarIcon, Menu, Sparkles, Copy,
-  Briefcase, Maximize2, Send
+  Briefcase, Maximize2, Send, Plus
 } from 'lucide-react';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 
@@ -97,17 +97,43 @@ const App: React.FC = () => {
 
   const [goals, setGoals] = useState<DashboardGoals>(() => {
     const saved = localStorage.getItem(`even_goals_${currentUser?.id || 'default'}`);
-    if (saved) return JSON.parse(saved);
-    return {
-      amountSpent: { value: 0, mode: 'monthly' },
-      leads: { value: 0, mode: 'monthly' },
-      cpl: { value: 0, mode: 'fixed' },
-      ctr: { value: 0, mode: 'fixed' },
-      cpm: { value: 0, mode: 'fixed' },
-      frequency: { value: 0, mode: 'fixed' },
-      quantity: { value: 0, mode: 'monthly' }
+    const defaultGoals = {
+      amountSpent: { value: 0, mode: 'monthly' as GoalMode },
+      leads: { value: 0, mode: 'monthly' as GoalMode },
+      cpl: { value: 0, mode: 'fixed' as GoalMode },
+      ctr: { value: 0, mode: 'fixed' as GoalMode },
+      cpm: { value: 0, mode: 'fixed' as GoalMode },
+      frequency: { value: 0, mode: 'fixed' as GoalMode },
+      quantity: { value: 0, mode: 'monthly' as GoalMode },
+      mensagensEnviadas: { value: 0, mode: 'monthly' as GoalMode },
+      atendimento: { value: 0, mode: 'monthly' as GoalMode },
+      reuniaoMarcada: { value: 0, mode: 'monthly' as GoalMode },
+      reuniaoRealizada: { value: 0, mode: 'monthly' as GoalMode },
+      vendas: { value: 0, mode: 'monthly' as GoalMode }
     };
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Migração: adicionar novas propriedades se não existirem
+        return {
+          ...defaultGoals,
+          ...parsed,
+          mensagensEnviadas: parsed.mensagensEnviadas || defaultGoals.mensagensEnviadas,
+          atendimento: parsed.atendimento || defaultGoals.atendimento,
+          reuniaoMarcada: parsed.reuniaoMarcada || defaultGoals.reuniaoMarcada,
+          reuniaoRealizada: parsed.reuniaoRealizada || defaultGoals.reuniaoRealizada,
+          vendas: parsed.vendas || defaultGoals.vendas
+        };
+      } catch (e) {
+        console.error('Erro ao carregar metas do localStorage:', e);
+        return defaultGoals;
+      }
+    }
+    return defaultGoals;
   });
+  const [goalsHistory, setGoalsHistory] = useState<any[]>([]);
+  const [activeGoalId, setActiveGoalId] = useState<number | null>(null);
 
   // State for AI Key management
   const [openaiKey, setOpenaiKey] = useState<string>(() => {
@@ -188,7 +214,7 @@ const App: React.FC = () => {
             onChange={(val) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: val } })}
           />
         </div>
-        {(metricKey === 'amountSpent' || metricKey === 'leads' || metricKey === 'quantity') && (
+        {(metricKey === 'amountSpent' || metricKey === 'leads' || metricKey === 'quantity' || metricKey === 'mensagensEnviadas' || metricKey === 'atendimento' || metricKey === 'reuniaoMarcada' || metricKey === 'reuniaoRealizada' || metricKey === 'vendas') && (
           <div>
             <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Modo de Cálculo</label>
             <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl">
@@ -363,23 +389,32 @@ const App: React.FC = () => {
     // Load metas from Supabase based on user ID
     if (firstId !== 1) {
       try {
-        const { data: remoteGoals, error } = await supabase
-          .from(`Meta_${firstId}`)
+        const { data: history, error } = await supabase
+          .from('Meta_2')
           .select('*')
-          .eq('id', 1)
-          .maybeSingle();
+          .order('id', { ascending: false });
 
-        if (remoteGoals && !error) {
-          console.log('✅ Metas carregadas do Supabase:', remoteGoals);
-          setGoals({
-            amountSpent: { value: remoteGoals.Orçamento || 0, mode: 'monthly' },
-            leads: { value: remoteGoals.Leads || 0, mode: 'monthly' },
-            cpl: { value: remoteGoals.CPL || 0, mode: 'fixed' },
-            ctr: { value: remoteGoals.CTR || 0, mode: 'fixed' },
-            cpm: { value: remoteGoals.CPM || 0, mode: 'fixed' },
-            frequency: { value: remoteGoals.Frequência || 0, mode: 'fixed' },
-            quantity: { value: remoteGoals.Quantidade || 0, mode: 'monthly' }
-          });
+        if (history && !error) {
+          console.log('✅ Histórico de metas carregado:', history);
+          setGoalsHistory(history);
+          const latest = history[0];
+          if (latest) {
+            setActiveGoalId(latest.id);
+            setGoals({
+              amountSpent: { value: latest.Orçamento || 0, mode: 'monthly' },
+              leads: { value: latest.Leads || 0, mode: 'monthly' },
+              cpl: { value: latest.CPL || 0, mode: 'fixed' },
+              ctr: { value: latest.CTR || 0, mode: 'fixed' },
+              cpm: { value: latest.CPM || 0, mode: 'fixed' },
+              frequency: { value: latest.Frequência || 0, mode: 'fixed' },
+              quantity: { value: latest.Quantidade || 0, mode: 'monthly' },
+              mensagensEnviadas: { value: latest['Mensagens Enviadas'] || 0, mode: 'monthly' },
+              atendimento: { value: latest.Atendimento || 0, mode: 'monthly' },
+              reuniaoMarcada: { value: latest['Reunião Marcada'] || 0, mode: 'monthly' },
+              reuniaoRealizada: { value: latest['Reunião Realizada'] || 0, mode: 'monthly' },
+              vendas: { value: latest.Vendas || 0, mode: 'monthly' }
+            });
+          }
         } else if (error) {
           console.warn('⚠️ Erro ao carregar metas:', error.message);
         }
@@ -470,13 +505,30 @@ const App: React.FC = () => {
     const filteredRawData: Record<string, any[]> = {};
     const allFilteredRows: any[] = [];
     Object.entries(baseData.rawDataByTable).forEach(([tableName, rows]) => {
+      const isProjectInfoTable = tableName.toLowerCase().includes('dados');
       const filtered = (rows as any[]).filter(row => {
-        if (selectedCampaigns.length > 0) { const val = getRowValue(row, CAMPAIGN_KEYS); if (val && !selectedCampaigns.includes(val)) return false; }
-        if (selectedAdSets.length > 0) { const val = getRowValue(row, ADSET_KEYS); if (val && !selectedAdSets.includes(val)) return false; }
-        if (selectedAds.length > 0) { const val = getRowValue(row, AD_KEYS); if (val && !selectedAds.includes(val)) return false; }
+        // Project info tables (Dados_X) shouldn't be filtered by marketing campaign/ads
+        if (isProjectInfoTable) return true;
+
+        if (selectedCampaigns.length > 0) {
+          const val = getRowValue(row, CAMPAIGN_KEYS);
+          if (!val || !selectedCampaigns.includes(val)) return false;
+        }
+        if (selectedAdSets.length > 0) {
+          const val = getRowValue(row, ADSET_KEYS);
+          if (!val || !selectedAdSets.includes(val)) return false;
+        }
+        if (selectedAds.length > 0) {
+          const val = getRowValue(row, AD_KEYS);
+          if (!val || !selectedAds.includes(val)) return false;
+        }
         if (startDate || endDate) {
           const rowDateRaw = row.Date || row.Day || row.dia || row.data || row.created_at;
-          if (rowDateRaw) { const rowDate = new Date(rowDateRaw); if (startDate && rowDate < new Date(startDate)) return false; if (endDate && rowDate > new Date(endDate)) return false; }
+          if (rowDateRaw) {
+            const rowDate = new Date(rowDateRaw);
+            if (startDate && rowDate < new Date(startDate)) return false;
+            if (endDate && rowDate > new Date(endDate)) return false;
+          }
         }
         return true;
       });
@@ -492,13 +544,13 @@ const App: React.FC = () => {
     if (currentUser?.id && currentUser.id !== 1) {
       try {
         const { error } = await supabase
-          .from(`Meta_${currentUser.id}`)
+          .from('Meta_2')
           .delete()
           .eq('id', 1);
 
         if (error) {
           console.error('Erro ao excluir no Supabase:', error);
-          alert(`Erro ao excluir as metas no banco de dados (Meta_${currentUser.id}).`);
+          alert('Erro ao excluir as metas no banco de dados (Meta_2).');
         } else {
           // Reset local state
           const resetGoals: DashboardGoals = {
@@ -508,7 +560,12 @@ const App: React.FC = () => {
             ctr: { value: 0, mode: 'fixed' },
             cpm: { value: 0, mode: 'fixed' },
             frequency: { value: 0, mode: 'fixed' },
-            quantity: { value: 0, mode: 'monthly' }
+            quantity: { value: 0, mode: 'monthly' },
+            mensagensEnviadas: { value: 0, mode: 'monthly' },
+            atendimento: { value: 0, mode: 'monthly' },
+            reuniaoMarcada: { value: 0, mode: 'monthly' },
+            reuniaoRealizada: { value: 0, mode: 'monthly' },
+            vendas: { value: 0, mode: 'monthly' }
           };
           setGoals(resetGoals);
           localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
@@ -526,7 +583,12 @@ const App: React.FC = () => {
         ctr: { value: 0, mode: 'fixed' },
         cpm: { value: 0, mode: 'fixed' },
         frequency: { value: 0, mode: 'fixed' },
-        quantity: { value: 0, mode: 'monthly' }
+        quantity: { value: 0, mode: 'monthly' },
+        mensagensEnviadas: { value: 0, mode: 'monthly' },
+        atendimento: { value: 0, mode: 'monthly' },
+        reuniaoMarcada: { value: 0, mode: 'monthly' },
+        reuniaoRealizada: { value: 0, mode: 'monthly' },
+        vendas: { value: 0, mode: 'monthly' }
       };
       setGoals(resetGoals);
       localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
@@ -534,37 +596,135 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveGoals = async () => {
+  const handleAddGoals = async () => {
     // Save to localStorage
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(goals));
 
-    if (currentUser?.id && currentUser.id !== 1) {
+    const targetId = selectedClientIds[0] || currentUser?.id;
+    if (targetId && currentUser?.role === 'admin') {
       try {
-        const { error } = await supabase
-          .from(`Meta_${currentUser.id}`)
-          .upsert({
-            id: 1,
+        const { data: newRow, error } = await supabase
+          .from('Meta_2')
+          .insert([{
             Orçamento: goals.amountSpent.value,
             Leads: goals.leads.value,
             CPL: goals.cpl.value,
             CTR: goals.ctr.value,
             CPM: goals.cpm.value,
             Frequência: goals.frequency.value,
-            Quantidade: goals.quantity.value
-          });
+            Quantidade: goals.quantity.value,
+            'Mensagens Enviadas': goals.mensagensEnviadas.value,
+            Atendimento: goals.atendimento.value,
+            'Reunião Marcada': goals.reuniaoMarcada.value,
+            'Reunião Realizada': goals.reuniaoRealizada.value,
+            Vendas: goals.vendas.value
+          }])
+          .select();
 
         if (error) {
           console.error('Erro ao salvar metas no Supabase:', error);
-          alert(`Erro ao sincronizar com o banco de dados. Verifique a tabela Meta_${currentUser.id}.`);
+          alert(`ERRO SUPABASE: ${error.message} (Tabela: Meta_2)`);
         } else {
-          alert(`Metas salvas e sincronizadas no Supabase (Meta_${currentUser.id})!`);
+          const insertedRow = newRow[0];
+          setGoalsHistory(prev => [insertedRow, ...prev]);
+          setActiveGoalId(insertedRow.id);
+          alert(`✅ SUCESSO: Nova meta adicionada (ID #${insertedRow.id}) na tabela Meta_2.`);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Exception saving goals:', err);
-        alert('Erro de conexão ao salvar metas.');
+        alert(`ERRO DE CONEXÃO: ${err.message}`);
       }
     } else {
-      alert('Metas salvas localmente com sucesso!');
+      alert('Metas salvas localmente (Modo Visualização ou Usuário sem Tabela).');
+    }
+  };
+
+  const handleUpdateGoals = async () => {
+    const targetId = selectedClientIds[0] || currentUser?.id;
+    const idToUpdate = activeGoalId || (goalsHistory.length > 0 ? goalsHistory[0].id : null);
+
+    if (!idToUpdate) {
+      alert('Selecione uma meta no histórico antes de tentar atualizar.');
+      return;
+    }
+
+    if (targetId && currentUser?.role === 'admin') {
+      try {
+        const { data: updatedRow, error } = await supabase
+          .from('Meta_2')
+          .update({
+            Orçamento: goals.amountSpent.value,
+            Leads: goals.leads.value,
+            CPL: goals.cpl.value,
+            CTR: goals.ctr.value,
+            CPM: goals.cpm.value,
+            Frequência: goals.frequency.value,
+            Quantidade: goals.quantity.value,
+            'Mensagens Enviadas': goals.mensagensEnviadas.value,
+            Atendimento: goals.atendimento.value,
+            'Reunião Marcada': goals.reuniaoMarcada.value,
+            'Reunião Realizada': goals.reuniaoRealizada.value,
+            Vendas: goals.vendas.value
+          })
+          .eq('id', idToUpdate)
+          .select();
+
+        if (error) {
+          console.error('Erro ao atualizar meta no Supabase:', error);
+          alert(`ERRO AO ATUALIZAR: ${error.message}`);
+        } else {
+          const finalRow = updatedRow[0];
+          setGoalsHistory(prev => prev.map(row => row.id === idToUpdate ? finalRow : row));
+          alert(`✅ SUCESSO: Meta ID #${idToUpdate} atualizada na tabela Meta_2.`);
+        }
+      } catch (err: any) {
+        console.error('Exception updating goals:', err);
+        alert(`ERRO DE CONEXÃO: ${err.message}`);
+      }
+    }
+  };
+
+  const handleSelectGoalRow = (row: any) => {
+    setActiveGoalId(row.id);
+    const newGoals: DashboardGoals = {
+      amountSpent: { value: row.Orçamento || 0, mode: 'monthly' },
+      leads: { value: row.Leads || 0, mode: 'monthly' },
+      cpl: { value: row.CPL || 0, mode: 'fixed' },
+      ctr: { value: row.CTR || 0, mode: 'fixed' },
+      cpm: { value: row.CPM || 0, mode: 'fixed' },
+      frequency: { value: row.Frequência || 0, mode: 'fixed' },
+      quantity: { value: row.Quantidade || 0, mode: 'monthly' },
+      mensagensEnviadas: { value: row['Mensagens Enviadas'] || 0, mode: 'monthly' },
+      atendimento: { value: row.Atendimento || 0, mode: 'monthly' },
+      reuniaoMarcada: { value: row['Reunião Marcada'] || 0, mode: 'monthly' },
+      reuniaoRealizada: { value: row['Reunião Realizada'] || 0, mode: 'monthly' },
+      vendas: { value: row.Vendas || 0, mode: 'monthly' }
+    };
+    setGoals(newGoals);
+    localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(newGoals));
+  };
+
+  const handleDeleteGoalRow = async (rowId: number) => {
+    if (!confirm('Tem certeza que deseja excluir esta meta permanentemente?')) return;
+
+    const targetId = selectedClientIds[0] || currentUser?.id;
+    if (targetId && currentUser?.role === 'admin') {
+      try {
+        const { error } = await supabase
+          .from('Meta_2')
+          .delete()
+          .eq('id', rowId);
+
+        if (error) {
+          console.error('Erro ao excluir no Supabase:', error);
+          alert(`Erro ao excluir a linha ${rowId} no banco de dados.`);
+        } else {
+          setGoalsHistory(prev => prev.filter(row => row.id !== rowId));
+          alert('Linha excluída com sucesso!');
+        }
+      } catch (err) {
+        console.error('Exception deleting goal row:', err);
+      }
     }
   };
 
@@ -585,7 +745,12 @@ const App: React.FC = () => {
     ctr: goals.ctr.value,
     cpm: goals.cpm.value,
     frequency: goals.frequency.value,
-    quantity: getScaledValue(goals.quantity)
+    quantity: getScaledValue(goals.quantity),
+    mensagensEnviadas: getScaledValue(goals.mensagensEnviadas),
+    atendimento: getScaledValue(goals.atendimento),
+    reuniaoMarcada: getScaledValue(goals.reuniaoMarcada),
+    reuniaoRealizada: getScaledValue(goals.reuniaoRealizada),
+    vendas: getScaledValue(goals.vendas)
   }), [goals, startDate, endDate]);
 
   const calculateStatus = (actual: number, target: number, type: 'higher-better' | 'lower-better'): KPIStatus => {
@@ -897,9 +1062,50 @@ const App: React.FC = () => {
       dateRange: { startDate, endDate }
     };
 
-    const systemPrompt = `Você é um consultor especialista em marketing digital e análise de performance da Even Digital.
+    const systemPrompt = currentUser?.role === 'admin'
+      ? `Você é o "Strategyst AI", um agente de inteligência artificial especialista em gestão de tráfego pago e mídia programática. Sua missão principal não é apenas gerar cliques ou leads, mas sim maximizar o Retorno sobre o Investimento em Publicidade (ROAS) e atingir metas de negócio específicas, como Custo por Aquisição (CPA) e Custo por Lead Qualificado (CPLQ). Você atua como um estrategista de marketing digital, um analista de dados e um otimizador de campanhas.
+Princípios Fundamentais (Core Principles):
+Estratégia Antes da Tática: Você sempre começa pelo "porquê". Antes de sugerir qualquer campanha, você deve compreender profundamente o modelo de negócio, o produto/serviço, o ticket médio, a persona do cliente e as metas de negócio.
+Qualidade Acima de Volume: Sua otimização padrão é para a qualidade, não para a quantidade. Você entende que um lead qualificado vale mais que dez leads desqualificados. Você prioriza a geração de leads com alta intenção de compra.
+Mentalidade de Teste Científico: Todas as novas campanhas começam com uma fase de teste estruturada (ABO - Ad set Budget Optimization). Você formula hipóteses claras, isola variáveis (públicos, criativos, copy) e analisa os dados para tomar decisões baseadas em evidências, não em suposições.
+Foco em Métricas de Negócio: Você vai além das métricas de vaidade (curtidas, alcance). Suas análises se concentram em CPL, CPA, CPLQ, ROAS e no funil de conversão completo. Você deve ser capaz de calcular e interpretar essas métricas.
+Domínio da Plataforma e Adaptação: Você tem conhecimento profundo das principais plataformas de anúncios (Meta Ads, Google Ads, LinkedIn Ads, TikTok Ads), incluindo suas nuances técnicas, políticas e as melhores práticas atuais. Você está ciente das limitações (como o iOS 14+) e sabe como contorná-los com estratégias modernas.
+Estrutura de Trabalho e Metodologia:
+Ao ser apresentado a um novo desafio de campanha, você deve seguir a seguinte metodologia:
+Fase 1: Diagnóstico e Planejamento Estratégico
+Briefing: Faça perguntas para entender o objetivo (ex: gerar leads para imóvel de alto ticket), o orçamento, o público-alvo, os criativos disponíveis e as metas de custo (ex: CPL alvo de R$ 80).
+Definição de KPIs: Estabeleça os Indicadores-Chave de Performance (KPIs) que definirão o sucesso (ex: CPLQ, Taxa de Conversão do Formulário).
+Estrutura da Campanha: Proponha uma estrutura de campanha completa, detalhando:
+Nível de Campanha: Objetivo (Conversões, Leads), método (Landing Page, Formulário Nativo) e estratégia de orçamento (ABO para teste, CBO para escala).
+Nível de Conjunto de Anúncios: Defina os públicos a serem testados (ex: Geográfico, Interesses em Camadas, Lookalikes, Remarketing) e a alocação de orçamento para cada um.
+Nível de Anúncio: Planeje o uso dos criativos e a abordagem da copy.
+Fase 2: Execução e Otimização
+Configuração do Formulário/Landing Page: Se aplicável, estruture formulários de alta intenção com lógica condicional para qualificar leads na fonte.
+Análise de Performance: Monitore as campanhas e, após um período de aprendizado (5-7 dias), apresente uma análise de dados clara, comparando o desempenho de cada conjunto de anúncios em relação aos KPIs definidos.
+Tomada de Decisão: Com base na análise, recomende ações claras e diretas:
+Pausar: Conjuntos de anúncios com performance muito abaixo da meta.
+Manter/Otimizar: Conjuntos com performance mediana.
+Escalar: Conjuntos de anúncios vencedores, que atingiram ou superaram a meta.
+Realocação de Orçamento: Sugira como o orçamento dos conjuntos pausados deve ser reinvestido nos conjuntos vencedores.
+Fase 3: Escala e Crescimento
+Estratégias de Escala: Proponha métodos de escala vertical (aumento de orçamento) e horizontal (duplicação de conjuntos para novos públicos semelhantes).
+Ativação de CBO: Recomende a transição de ABO para CBO (Campaign Budget Optimization) na fase de escala, utilizando apenas os públicos e criativos já validados.
+Análise de Funil Completo: Incentive a integração com CRMs e a análise do ciclo de vida do cliente para otimizar campanhas com base em dados de vendas reais, não apenas em conversões online.
+Conhecimentos Técnicos Específicos:
+Pixel e API de Conversões: Você entende a importância e a função de ambos. Sabe que a API de Conversões é crucial para mitigar a perda de dados do iOS.
+Lógica Condicional: Você sabe como e quando usar a lógica condicional em formulários para maximizar a qualidade dos leads.
+Tipos de Otimização: Você compreende a diferença entre otimizar para "Leads" vs. "Leads Convertidos" e sabe qual escolher para cada objetivo de negócio.
+Exclusão de Públicos: Você aplica a exclusão de públicos para evitar sobreposição e garantir que a jornada do usuário seja coerente (ex: excluir quem já converteu de campanhas de prospecção).
+Personalidade:
+Você é analítico, direto e orientado a dados. Você não dá opiniões, você apresenta conclusões baseadas em evidências. Você é um parceiro estratégico que capacita o usuário a tomar as melhores decisões para o crescimento do seu negócio.
+IMPORTANTE: Não utilize asteriscos (*) em suas respostas em hipótese alguma.
+
+DADOS ATUAIS DO DASHBOARD (Aba: ${activeTab}):
+${JSON.stringify(tabData, null, 2)}`
+      : `Você é um consultor especialista em marketing digital e análise de performance da Even Digital.
     Você tem acesso aos dados atualizados do dashboard do cliente na aba ${activeTab}.
     Seja profissional, direto e forneça insights acionáveis quando solicitado.
+    IMPORTANTE: Não utilize asteriscos (*) em suas respostas em hipótese alguma.
     
     DADOS ATUAIS DO DASHBOARD:
     ${JSON.stringify(tabData, null, 2)}`;
@@ -910,7 +1116,7 @@ const App: React.FC = () => {
       setAiReport('');
       setChatMessages([
         { role: 'system', content: systemPrompt },
-        { role: 'assistant', content: `Olá! Sou seu consultor da Even Digital. Já carreguei todos os dados da aba ${activeTab === 'overview' ? 'Visão Geral' : activeTab === 'marketing' ? 'Marketing' : 'Vendas'} no meu sistema. Como posso te ajudar a analisar sua performance hoje?` }
+        { role: 'assistant', content: `Olá! Sou o Strategyst AI, seu especialista em tráfego e performance. Já carreguei todos os dados da aba ${activeTab === 'overview' ? 'Visão Geral' : activeTab === 'marketing' ? 'Marketing' : 'Vendas'} no meu sistema. Como posso ajudar a otimizar seu ROAS e escalar seus resultados hoje?` }
       ]);
       return;
     }
@@ -1153,7 +1359,7 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                        {currentUser?.role === 'admin' ? 'Consultor IA Even Digital' : 'Relatório de Consultoria com IA'}
+                        {currentUser?.role === 'admin' ? 'Strategyst AI - Consultor Elite' : 'Relatório de Consultoria com IA'}
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                         {isGeneratingReport ? 'Processando dados...' : currentUser?.role === 'admin' ? 'Conversa ativa com o especialista' : 'Análise completa gerada'}
@@ -1391,30 +1597,30 @@ const App: React.FC = () => {
 
           {
             activeTab === 'metas' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-primary/10 rounded-xl text-primary"><Target size={24} /></div>
                       <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Configuração de Metas</h2>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">Defina os objetivos de performance para os indicadores</p>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Adicionar Novas Metas</h2>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">Defina os novos objetivos e salve para atualizar o indicador ativo</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       {currentUser?.role === 'admin' ? (
                         <>
-                          <button onClick={handleDeleteGoals} className="px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 dark:text-rose-400 rounded-xl font-bold text-xs flex items-center gap-2 transition-all active:scale-95 border border-rose-100 dark:border-rose-900/50">
-                            <Trash2 size={16} /> <span className="hidden sm:inline">Excluir Metas</span>
+                          <button onClick={handleUpdateGoals} className="px-5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-primary text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-all active:scale-95 flex items-center gap-2">
+                            <Save size={18} className="text-primary" /> Alterar Atual
                           </button>
-                          <button onClick={handleSaveGoals} className="px-6 py-2.5 bg-primary hover:bg-primary-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-primary/20 flex items-center gap-2 transition-all active:scale-95">
-                            <Save size={16} /> Salvar Alterações
+                          <button onClick={handleAddGoals} className="px-6 py-3 bg-primary hover:bg-primary-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 flex items-center gap-2 transition-all active:scale-95">
+                            <Plus size={18} /> Adicionar Nova
                           </button>
                         </>
                       ) : (
                         <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-100 dark:border-amber-800/50">
                           <AlertCircle size={14} />
-                          <span className="text-[10px] font-black uppercase tracking-wider italic">Modo de Visualização: Apenas administradores podem alterar as metas</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider italic">Modo de Visualização</span>
                         </div>
                       )}
                     </div>
@@ -1427,8 +1633,91 @@ const App: React.FC = () => {
                     <GoalInputCard icon={ReachIcon} title="CPM" metricKey="cpm" />
                     <GoalInputCard icon={RefreshCw} title="Frequência" metricKey="frequency" />
                     <GoalInputCard icon={ShoppingBag} title="Quantidade de Vendas" metricKey="quantity" />
+                    <GoalInputCard icon={Mail} title="Mensagens Enviadas (%)" metricKey="mensagensEnviadas" />
+                    <GoalInputCard icon={Users} title="Atendimento (%)" metricKey="atendimento" />
+                    <GoalInputCard icon={Calendar} title="Reunião Marcada (%)" metricKey="reuniaoMarcada" />
+                    <GoalInputCard icon={Check} title="Reunião Realizada (%)" metricKey="reuniaoRealizada" />
+                    <GoalInputCard icon={Trophy} title="Vendas (%)" metricKey="vendas" />
                   </div>
+                </div>
 
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Activity size={18} className="text-primary" />
+                      <h3 className="text-sm font-bold text-slate-700 dark:text-white uppercase tracking-widest">Histórico de Metas Adicionadas</h3>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">A primeira linha é a meta ativa no dashboard</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/30 dark:bg-slate-900/30">
+                          <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Data</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic text-center">Invest.</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic text-center">Leads</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic text-center">CPL</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic text-center">CTR</th>
+                          <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest italic text-center">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                        {goalsHistory.map((row, idx) => (
+                          <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${idx === 0 ? 'bg-primary/5' : ''}`}>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                  {new Date(row.Criado || Date.now()).toLocaleDateString('pt-BR')}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-medium">#{row.id}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{FORMATTERS.currency(row.Orçamento)}</span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{FORMATTERS.number(row.Leads)}</span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{FORMATTERS.currency(row.CPL)}</span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{row.CTR}%</span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleSelectGoalRow(row)}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all ${activeGoalId === row.id
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-primary/10 hover:text-primary'
+                                    }`}
+                                >
+                                  {activeGoalId === row.id ? 'Ativa' : 'Usar'}
+                                </button>
+                                {currentUser?.role === 'admin' && (
+                                  <button
+                                    onClick={() => handleDeleteGoalRow(row.id)}
+                                    className="p-2 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 dark:hover:text-rose-400 text-slate-300 rounded-lg transition-all"
+                                    title="Excluir esta linha"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {goalsHistory.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center">
+                              <p className="text-xs font-bold text-slate-400 uppercase italic tracking-widest">Nenhuma meta encontrada</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )

@@ -22,6 +22,11 @@ export interface DashboardGoals {
   cpm: { value: number; mode: GoalMode };
   frequency: { value: number; mode: GoalMode };
   quantity: { value: number; mode: GoalMode };
+  mensagensEnviadas: { value: number; mode: GoalMode };
+  atendimento: { value: number; mode: GoalMode };
+  reuniaoMarcada: { value: number; mode: GoalMode };
+  reuniaoRealizada: { value: number; mode: GoalMode };
+  vendas: { value: number; mode: GoalMode };
 }
 
 
