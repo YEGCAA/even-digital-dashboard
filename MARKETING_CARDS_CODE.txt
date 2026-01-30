@@ -1,0 +1,77 @@
+                {/* Marketing Metrics KPI Cards - THIRD ROW */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <KPICard
+                    title="Orçamento Gasto"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Investimento Total",
+                      value: FORMATTERS.currency(data.metrics.totalSpend),
+                      subValue: `Orçamento total investido. Meta: ${FORMATTERS.currency(scaledGoals.amountSpent)}`
+                    })}
+                    value={FORMATTERS.summarized(data.metrics.totalSpend)}
+                    meta="INVESTIMENTO"
+                    metaValue={`Meta: ${FORMATTERS.summarized(scaledGoals.amountSpent)}`}
+                    icon={<DollarSign size={16} />}
+                    statusTag={statusMap.amountSpent}
+                  />
+
+                  <KPICard
+                    title="CPL"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Custo por Lead (CPL)",
+                      value: FORMATTERS.currency(data.metrics.marketingMetrics.cpl),
+                      subValue: `Custo médio para adquirir cada lead. Meta: ${FORMATTERS.currency(scaledGoals.cpl)}`
+                    })}
+                    value={FORMATTERS.currency(data.metrics.marketingMetrics.cpl)}
+                    meta="CUSTO POR LEAD"
+                    metaValue={`Meta: ${FORMATTERS.currency(scaledGoals.cpl)}`}
+                    icon={<TrendingDown size={16} />}
+                    statusTag={statusMap.cpl}
+                  />
+
+                  <KPICard
+                    title="CTR"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Taxa de Cliques (CTR)",
+                      value: `${data.metrics.marketingMetrics.ctr.toFixed(2)}%`,
+                      subValue: `Percentual de pessoas que clicaram no anúncio. Meta: ${scaledGoals.ctr.toFixed(2)}%`
+                    })}
+                    value={`${data.metrics.marketingMetrics.ctr.toFixed(2)}%`}
+                    meta="TAXA DE CLIQUES"
+                    metaValue={`Meta: ${scaledGoals.ctr.toFixed(2)}%`}
+                    icon={<MousePointer size={16} />}
+                    statusTag={statusMap.ctr}
+                  />
+
+                  <KPICard
+                    title="CPM"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Custo por Mil Impressões (CPM)",
+                      value: FORMATTERS.currency(data.metrics.marketingMetrics.cpm),
+                      subValue: `Custo para alcançar 1.000 pessoas. Meta: ${FORMATTERS.currency(scaledGoals.cpm)}`
+                    })}
+                    value={FORMATTERS.currency(data.metrics.marketingMetrics.cpm)}
+                    meta="CUSTO POR MIL"
+                    metaValue={`Meta: ${FORMATTERS.currency(scaledGoals.cpm)}`}
+                    icon={<Eye size={16} />}
+                    statusTag={statusMap.cpm}
+                  />
+
+                  <KPICard
+                    title="Frequência"
+                    onClick={() => setIsMetricModalOpen({
+                      isOpen: true,
+                      title: "Frequência de Exposição",
+                      value: data.metrics.marketingMetrics.frequency.toFixed(2),
+                      subValue: `Número médio de vezes que cada pessoa viu o anúncio. Meta: ${scaledGoals.frequency.toFixed(2)}`
+                    })}
+                    value={data.metrics.marketingMetrics.frequency.toFixed(2)}
+                    meta="FREQUÊNCIA"
+                    metaValue={`Meta: ${scaledGoals.frequency.toFixed(2)}`}
+                    icon={<RefreshCw size={16} />}
+                    statusTag={statusMap.frequency}
+                  />
+                </div>

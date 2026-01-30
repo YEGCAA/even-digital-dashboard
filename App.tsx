@@ -1833,7 +1833,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   if (!data?.rawDataByTable) return [];
                   const key = Object.keys(data.rawDataByTable).find(k => k.toLowerCase().includes('marketing'));
                   return key ? data.rawDataByTable[key] : [];
-                })()} />
+                })()} startDate={startDate} endDate={endDate} />
 
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-10 opacity-[0.03] rotate-12"><VerticalBarIcon size={300} /></div>

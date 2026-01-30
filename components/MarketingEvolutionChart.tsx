@@ -14,9 +14,11 @@ import { FORMATTERS } from '../constants';
 
 interface MarketingEvolutionChartProps {
     data: any[]; // Raw marketing rows
+    startDate?: string; // YYYY-MM-DD
+    endDate?: string; // YYYY-MM-DD
 }
 
-export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = ({ data }) => {
+export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = ({ data, startDate, endDate }) => {
     const chartData = useMemo(() => {
         if (!data || data.length === 0) return [];
 
@@ -73,13 +75,19 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
         });
 
         return Object.values(dailyStats)
+            .filter(item => {
+                // Aplicar filtro de data se fornecido
+                if (startDate && item.date < startDate) return false;
+                if (endDate && item.date > endDate) return false;
+                return true;
+            })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             .map(item => ({
                 ...item,
                 cpl: item.leads > 0 ? item.spend / item.leads : 0,
                 formattedDate: new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
             }));
-    }, [data]);
+    }, [data, startDate, endDate]);
 
     if (chartData.length === 0) {
         return (

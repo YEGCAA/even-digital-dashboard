@@ -1,0 +1,65 @@
+// Código para substituir o adRankingData (linha ~835-870)
+// Adiciona filtros de data, campanha, adset e ad
+
+const adRankingData = useMemo(() => {
+  if (!data?.rawDataByTable) return [];
+  const marketingTable = Object.keys(data.rawDataByTable).find(k => k.toLowerCase().includes('marketing'));
+  if (!marketingTable) return [];
+  const rows = data.rawDataByTable[marketingTable] as any[];
+  
+  // Aplicar filtros de data e seleção
+  const filteredRows = rows.filter(row => {
+    // Filtro de data
+    const dateStr = getRowValue(row, ["Date", "Data", "date", "data_inicio"]);
+    if (dateStr) {
+      const rowDate = new Date(dateStr).toISOString().split('T')[0];
+      if (rowDate < startDate || rowDate > endDate) return false;
+    }
+    
+    // Filtro de campanha
+    if (selectedCampaigns.length > 0) {
+      const campaign = getRowValue(row, CAMPAIGN_KEYS) || '';
+      if (!selectedCampaigns.includes(campaign)) return false;
+    }
+    
+    // Filtro de adset
+    if (selectedAdSets.length > 0) {
+      const adset = getRowValue(row, ADSET_KEYS) || '';
+      if (!selectedAdSets.includes(adset)) return false;
+    }
+    
+    // Filtro de ad
+    if (selectedAds.length > 0) {
+      const ad = getRowValue(row, AD_KEYS) || '';
+      if (!selectedAds.includes(ad)) return false;
+    }
+    
+    return true;
+  });
+  
+  const adStats: Record<string, { campaign: string, adset: string, ad: string, leads: number, spend: number, clicks: number, impressions: number }> = {};
+  filteredRows.forEach(row => {
+    const campaign = getRowValue(row, CAMPAIGN_KEYS) || 'N/A';
+    const adset = getRowValue(row, ADSET_KEYS) || 'N/A';
+    const ad = getRowValue(row, AD_KEYS) || 'N/A';
+    const key = `${campaign}-${adset}-${ad}`;
+    const leads = parseCurrencyValue(getRowValue(row, ["leads", "lead count", "leads_gerados", "results"]));
+    const spend = parseCurrencyValue(getRowValue(row, ["Amount Spent", "investimento", "valor gasto", "spent"]));
+    const clicks = parseCurrencyValue(getRowValue(row, ["Link Clicks", "cliques", "clicks"]));
+    const impressions = parseCurrencyValue(getRowValue(row, ["Impressions", "impressoes"]));
+    if (!adStats[key]) { adStats[key] = { campaign, adset, ad, leads: 0, spend: 0, clicks: 0, impressions: 0 }; }
+    adStats[key].leads += leads;
+    adStats[key].spend += spend;
+    adStats[key].clicks += clicks;
+    adStats[key].impressions += impressions;
+  });
+  return Object.values(adStats)
+    .map(item => ({ ...item, cpl: item.leads > 0 ? item.spend / item.leads : item.spend, ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0 }))
+    .sort((a, b) => {
+      const scoreA = a.spend > 0 ? (a.leads * a.leads) / a.spend : 0;
+      const scoreB = b.spend > 0 ? (b.leads * b.leads) / b.spend : 0;
+      if (Math.abs(scoreA - scoreB) > 0.01) return scoreB - scoreA;
+      if (b.ctr !== a.ctr) return b.ctr - a.ctr;
+      return b.leads - a.leads;
+    });
+}, [data, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds]);
