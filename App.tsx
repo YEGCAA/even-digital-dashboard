@@ -781,7 +781,7 @@ const App: React.FC = () => {
       quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better'),
       mensagensEnviadas: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
-        const stage = correctedFunnelData.find(s => {
+        const stage = data.funnelData?.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'mensageminicial'.toLowerCase();
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
@@ -791,7 +791,7 @@ const App: React.FC = () => {
       })(),
       atendimento: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
-        const stage = correctedFunnelData.find(s => {
+        const stage = data.funnelData?.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'ematendimento'.toLowerCase();
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
@@ -801,7 +801,7 @@ const App: React.FC = () => {
       })(),
       reuniaoMarcada: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
-        const stage = correctedFunnelData.find(s => {
+        const stage = data.funnelData?.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'reuniaoagendada'.toLowerCase();
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
@@ -811,7 +811,7 @@ const App: React.FC = () => {
       })(),
       reuniaoRealizada: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
-        const stage = correctedFunnelData.find(s => {
+        const stage = data.funnelData?.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'reuniaorealizada'.toLowerCase();
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
@@ -821,7 +821,7 @@ const App: React.FC = () => {
       })(),
       vendas: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
-        const stage = correctedFunnelData.find(s => {
+        const stage = data.funnelData?.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'vendasconcluidas'.toLowerCase();
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
