@@ -360,9 +360,15 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       const isReservaSal = pipelineId === "3";
       const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
 
-      // Debug log
-      if (index < 5) {
-        console.log(`[PIPELINE] Lead: ${leadName} | ID Pipeline: "${pipelineId}" | Nome Pipeline: "${pipelineName}" | Classificado: ${finalPipeline}`);
+      // Determinar estágio final
+      const finalStage = isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa"));
+
+      // Debug log - mostrar mais leads de Reserva do Sal
+      if (isReservaSal && index < 20) {
+        console.log(`[RESERVA] Lead: ${leadName} | Estágio: "${finalStage}" | ID Pipeline: "${pipelineId}" | Status Venda: "${statusVendaRaw}"`);
+      }
+      if (!isReservaSal && index < 5) {
+        console.log(`[HIGH] Lead: ${leadName} | Estágio: "${finalStage}" | ID Pipeline: "${pipelineId}" | Status Venda: "${statusVendaRaw}"`);
       }
 
       leadsList.push({
@@ -372,7 +378,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         phone: String(findValue(row, ["telefone", "phone", "whatsapp", "celular"]) || "---"),
         businessTitle: String(findValue(row, ["titulo do negocio", "negocio", "deal title", "business"]) || "---"),
         pipeline: finalPipeline,
-        stage: isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa")),
+        stage: finalStage,
         stageId: stageId,
         quantity: multiplier,
         date: String(findValue(row, ["data", "created_at", "date", "dia"]) || "---"),
