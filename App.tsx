@@ -601,13 +601,6 @@ const App: React.FC = () => {
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(goals));
 
     const targetId = selectedClientIds[0] || currentUser?.id;
-
-    // Apenas o usuário 'admin' pode modificar metas no Supabase
-    if (currentUser?.username !== 'admin') {
-      alert('❌ ACESSO NEGADO: Apenas o administrador principal pode modificar as metas.');
-      return;
-    }
-
     if (targetId && currentUser?.role === 'admin') {
       try {
         const { data: newRow, error } = await supabase
@@ -652,12 +645,6 @@ const App: React.FC = () => {
 
     if (!idToUpdate) {
       alert('Selecione uma meta no histórico antes de tentar atualizar.');
-      return;
-    }
-
-    // Apenas o usuário 'admin' pode modificar metas no Supabase
-    if (currentUser?.username !== 'admin') {
-      alert('❌ ACESSO NEGADO: Apenas o administrador principal pode modificar as metas.');
       return;
     }
 
@@ -719,12 +706,6 @@ const App: React.FC = () => {
 
   const handleDeleteGoalRow = async (rowId: number) => {
     if (!confirm('Tem certeza que deseja excluir esta meta permanentemente?')) return;
-
-    // Apenas o usuário 'admin' pode modificar metas no Supabase
-    if (currentUser?.username !== 'admin') {
-      alert('❌ ACESSO NEGADO: Apenas o administrador principal pode modificar as metas.');
-      return;
-    }
 
     const targetId = selectedClientIds[0] || currentUser?.id;
     if (targetId && currentUser?.role === 'admin') {
