@@ -58,8 +58,6 @@ const AD_KEYS = ["Ad Name", "Nome do Anuncio", "ad_name", "Nome do anúncio", "A
 
 export const StatusBadge = ({ status }: { status: KPIStatus }) => {
   if (!status) return null;
-  const isGood = status === 'BOM';
-  const isAvg = status === 'MÉDIA';
   const getStatusStyles = () => {
     switch (status) {
       case 'EXCELENTE': return 'bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/30';
@@ -70,11 +68,12 @@ export const StatusBadge = ({ status }: { status: KPIStatus }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border-b-2 ${getStatusStyles()} uppercase tracking-wider animate-in fade-in zoom-in duration-300`}>
+    <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-black border-b-2 ${getStatusStyles()} uppercase tracking-tighter animate-in fade-in zoom-in duration-300 whitespace-nowrap min-w-[50px]`}>
       {status}
     </span>
   );
 };
+
 
 const App: React.FC = () => {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('even_theme') === 'dark');
@@ -214,26 +213,24 @@ const App: React.FC = () => {
             onChange={(val) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: val } })}
           />
         </div>
-        {(metricKey === 'amountSpent' || metricKey === 'leads' || metricKey === 'quantity' || metricKey === 'mensagensEnviadas' || metricKey === 'atendimento' || metricKey === 'reuniaoMarcada' || metricKey === 'reuniaoRealizada' || metricKey === 'vendas') && (
-          <div>
-            <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Modo de Cálculo</label>
-            <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl">
-              {(['daily', 'monthly', 'fixed'] as GoalMode[]).map(m => (
-                <button
-                  key={m}
-                  onClick={() => currentUser?.role === 'admin' && setGoals({ ...goals, [metricKey]: { ...goals[metricKey], mode: m } })}
-                  disabled={currentUser?.role !== 'admin'}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${goals[metricKey].mode === m
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                    } ${currentUser?.role !== 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {m === 'daily' ? 'Diário' : m === 'monthly' ? 'Mensal' : 'Fixo'}
-                </button>
-              ))}
-            </div>
+        <div>
+          <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Modo de Cálculo</label>
+          <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl">
+            {(['daily', 'monthly', 'fixed'] as GoalMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => currentUser?.role === 'admin' && setGoals({ ...goals, [metricKey]: { ...goals[metricKey], mode: m } })}
+                disabled={currentUser?.role !== 'admin'}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${goals[metricKey].mode === m
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                  } ${currentUser?.role !== 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {m === 'daily' ? 'Diário' : m === 'monthly' ? 'Mensal' : 'Fixo'}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -262,6 +259,9 @@ const App: React.FC = () => {
   const campaignRef = useRef<HTMLDivElement>(null);
   const adSetRef = useRef<HTMLDivElement>(null);
   const adRef = useRef<HTMLDivElement>(null);
+  const overviewPipelineRef = useRef<HTMLDivElement>(null);
+  const [isPipelineDropdownOpen, setIsPipelineDropdownOpen] = useState(false);
+
 
   // Dropdown UI states for Sales (using same filter values but different refs/opens)
   const [isSalesCampaignDropdownOpen, setIsSalesCampaignDropdownOpen] = useState(false);
@@ -278,7 +278,7 @@ const App: React.FC = () => {
   const [salesSearch, setSalesSearch] = useState('');
   const [selectedStage, setSelectedStage] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedVendaStatus, setSelectedVendaStatus] = useState<string[]>([]);
+  const [selectedVendaStatus, setSelectedVendaStatus] = useState<'Todos' | 'Atual' | 'Ganho' | 'Perdido'>('Todos');
   const [selectedPipelines, setSelectedPipelines] = useState<string[]>([]); // Novo filtro de Pipeline
   const [isSalesPipelineDropdownOpen, setIsSalesPipelineDropdownOpen] = useState(false);
   const pipelineRef = useRef<HTMLDivElement>(null);
@@ -403,19 +403,29 @@ const App: React.FC = () => {
           const latest = history[0];
           if (latest) {
             setActiveGoalId(latest.id);
+
+            // Tentar recuperar os modos salvos (em JSON na coluna Config, se existir)
+            let savedModes: any = {};
+            try {
+              if (latest.Config) {
+                const config = typeof latest.Config === 'string' ? JSON.parse(latest.Config) : latest.Config;
+                savedModes = config.modes || {};
+              }
+            } catch (e) { }
+
             setGoals({
-              amountSpent: { value: latest.Orçamento || 0, mode: 'monthly' },
-              leads: { value: latest.Leads || 0, mode: 'monthly' },
-              cpl: { value: latest.CPL || 0, mode: 'fixed' },
-              ctr: { value: latest.CTR || 0, mode: 'fixed' },
-              cpm: { value: latest.CPM || 0, mode: 'fixed' },
-              frequency: { value: latest.Frequência || 0, mode: 'fixed' },
-              quantity: { value: latest.Quantidade || 0, mode: 'monthly' },
-              mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'monthly' },
-              atendimento: { value: latest.Atendimento || 0, mode: 'monthly' },
-              reuniaoMarcada: { value: latest.Reunioes_Marcadas || 0, mode: 'monthly' },
-              reuniaoRealizada: { value: latest.Reunioes_Realizadas || 0, mode: 'monthly' },
-              vendas: { value: latest.Vendas || 0, mode: 'monthly' }
+              amountSpent: { value: latest.Orçamento || 0, mode: savedModes.amountSpent || 'monthly' },
+              leads: { value: latest.Leads || 0, mode: savedModes.leads || 'monthly' },
+              cpl: { value: latest.CPL || 0, mode: savedModes.cpl || 'fixed' },
+              ctr: { value: latest.CTR || 0, mode: savedModes.ctr || 'fixed' },
+              cpm: { value: latest.CPM || 0, mode: savedModes.cpm || 'fixed' },
+              frequency: { value: latest.Frequência || 0, mode: savedModes.frequency || 'fixed' },
+              quantity: { value: latest.Quantidade || 0, mode: savedModes.quantity || 'monthly' },
+              mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: savedModes.mensagensEnviadas || 'monthly' },
+              atendimento: { value: latest.Atendimento || 0, mode: savedModes.atendimento || 'monthly' },
+              reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: savedModes.reuniaoMarcada || 'monthly' },
+              reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: savedModes.reuniaoRealizada || 'monthly' },
+              vendas: { value: latest.Vendas || 0, mode: savedModes.vendas || 'monthly' }
             });
           }
         } else if (error) {
@@ -462,6 +472,8 @@ const App: React.FC = () => {
       if (campaignRef.current && !campaignRef.current.contains(event.target as Node)) setIsCampaignDropdownOpen(false);
       if (adSetRef.current && !adSetRef.current.contains(event.target as Node)) setIsAdSetDropdownOpen(false);
       if (adRef.current && !adRef.current.contains(event.target as Node)) setIsAdDropdownOpen(false);
+      if (overviewPipelineRef.current && !overviewPipelineRef.current.contains(event.target as Node)) setIsPipelineDropdownOpen(false);
+
 
       // Sales refs
       if (salesCampaignRef.current && !salesCampaignRef.current.contains(event.target as Node)) setIsSalesCampaignDropdownOpen(false);
@@ -504,7 +516,8 @@ const App: React.FC = () => {
     setIsFiltering(true);
     const timer = setTimeout(() => setIsFiltering(false), 300);
     return () => clearTimeout(timer);
-  }, [startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds]);
+  }, [startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds, selectedPipelines]);
+
 
   const data = useMemo(() => {
     if (!baseData?.rawDataByTable) return baseData;
@@ -512,28 +525,49 @@ const App: React.FC = () => {
     const allFilteredRows: any[] = [];
     Object.entries(baseData.rawDataByTable).forEach(([tableName, rows]) => {
       const isProjectInfoTable = tableName.toLowerCase().includes('dados');
+      const isStatusOrSalesTable = tableName.toLowerCase().includes('status_venda') || tableName.toLowerCase().includes('vendas');
+
       const filtered = (rows as any[]).filter(row => {
-        // Project info tables (Dados_X) shouldn't be filtered by marketing campaign/ads
+        // Project info tables (Dados_X) are static/config, skip all filters
         if (isProjectInfoTable) return true;
 
-        if (selectedCampaigns.length > 0) {
-          const val = getRowValue(row, CAMPAIGN_KEYS);
-          if (!val || !selectedCampaigns.includes(val)) return false;
+        // Apply campaign/marketing filters only if it's NOT a status/sales table
+        if (!isStatusOrSalesTable) {
+          if (selectedCampaigns.length > 0) {
+            const val = getRowValue(row, CAMPAIGN_KEYS);
+            if (!val || !selectedCampaigns.includes(val)) return false;
+          }
+          if (selectedAdSets.length > 0) {
+            const val = getRowValue(row, ADSET_KEYS);
+            if (!val || !selectedAdSets.includes(val)) return false;
+          }
+          if (selectedAds.length > 0) {
+            const val = getRowValue(row, AD_KEYS);
+            if (!val || !selectedAds.includes(val)) return false;
+          }
         }
-        if (selectedAdSets.length > 0) {
-          const val = getRowValue(row, ADSET_KEYS);
-          if (!val || !selectedAdSets.includes(val)) return false;
-        }
-        if (selectedAds.length > 0) {
-          const val = getRowValue(row, AD_KEYS);
-          if (!val || !selectedAds.includes(val)) return false;
-        }
+
+        // Apply date filter to EVERYTHING (except static project info)
         if (startDate || endDate) {
           const rowDateRaw = row.Date || row.Day || row.dia || row.data || row.created_at;
           if (rowDateRaw) {
-            const rowDate = new Date(rowDateRaw);
-            if (startDate && rowDate < new Date(startDate)) return false;
-            if (endDate && rowDate > new Date(endDate)) return false;
+            // Normalize date string (sometimes CRM dates are DD/MM/YYYY)
+            let dateStr = String(rowDateRaw);
+            if (dateStr.includes('/') && dateStr.split('/').length === 3) {
+              const [day, month, year] = dateStr.split('/');
+              dateStr = `${year}-${month}-${day}`;
+            }
+            const rowDate = new Date(dateStr);
+            if (!isNaN(rowDate.getTime())) {
+              if (startDate) {
+                const start = new Date(startDate + "T00:00:00");
+                if (rowDate < start) return false;
+              }
+              if (endDate) {
+                const end = new Date(endDate + "T23:59:59");
+                if (rowDate > end) return false;
+              }
+            }
           }
         }
         return true;
@@ -541,8 +575,9 @@ const App: React.FC = () => {
       filteredRawData[tableName] = filtered;
       allFilteredRows.push(...filtered);
     });
-    return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData, startDate, endDate);
-  }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds]);
+    return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData, startDate, endDate, selectedPipelines);
+  }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds, selectedPipelines]);
+
 
   const handleDeleteGoals = async () => {
     if (!confirm('Tem certeza que deseja excluir as metas do banco de dados? Isso voltará os valores para zero.')) return;
@@ -609,6 +644,12 @@ const App: React.FC = () => {
     const targetId = selectedClientIds[0] || currentUser?.id;
     if (targetId && currentUser?.role === 'admin') {
       try {
+        // Extrair apenas os modos para salvar no JSON
+        const modesToSave: Record<string, string> = {};
+        Object.entries(goals).forEach(([key, val]) => {
+          modesToSave[key] = (val as any).mode;
+        });
+
         const { data: newRow, error } = await supabase
           .from('Meta_2')
           .insert([{
@@ -623,13 +664,46 @@ const App: React.FC = () => {
             Atendimento: goals.atendimento.value,
             Reunioes_Marcadas: goals.reuniaoMarcada.value,
             Reunioes_Realizadas: goals.reuniaoRealizada.value,
-            Vendas: goals.vendas.value
+            Vendas: goals.vendas.value,
+            // Guardar modos em Config (requer que a coluna exista, se não existir o insert falha e tentamos sem)
+            Config: JSON.stringify({ modes: modesToSave })
           }])
           .select();
 
         if (error) {
-          console.error('Erro ao salvar metas no Supabase:', error);
-          alert(`ERRO SUPABASE: ${error.message} (Tabela: Meta_2)`);
+          // Fallback: se Config não existir, tenta salvar sem
+          if (error.message.includes('Config')) {
+            const { data: retryRow, error: retryError } = await supabase
+              .from('Meta_2')
+              .insert([{
+                Orçamento: goals.amountSpent.value,
+                Leads: goals.leads.value,
+                CPL: goals.cpl.value,
+                CTR: goals.ctr.value,
+                CPM: goals.cpm.value,
+                Frequência: goals.frequency.value,
+                Quantidade: goals.quantity.value,
+                Mensagens_Enviadas: goals.mensagensEnviadas.value,
+                Atendimento: goals.atendimento.value,
+                Reunioes_Marcadas: goals.reuniaoMarcada.value,
+                Reunioes_Realizadas: goals.reuniaoRealizada.value,
+                Vendas: goals.vendas.value
+              }])
+              .select();
+
+            if (retryError) {
+              console.error('Erro ao salvar metas no Supabase:', retryError);
+              alert(`ERRO SUPABASE: ${retryError.message}`);
+            } else {
+              const insertedRow = retryRow[0];
+              setGoalsHistory(prev => [insertedRow, ...prev]);
+              setActiveGoalId(insertedRow.id);
+              alert(`✅ SUCESSO: Metas salvas (Sem persistência de modos - ID #${insertedRow.id})`);
+            }
+          } else {
+            console.error('Erro ao salvar metas no Supabase:', error);
+            alert(`ERRO SUPABASE: ${error.message}`);
+          }
         } else {
           const insertedRow = newRow[0];
           setGoalsHistory(prev => [insertedRow, ...prev]);
@@ -656,6 +730,12 @@ const App: React.FC = () => {
 
     if (targetId && currentUser?.role === 'admin') {
       try {
+        // Extrair apenas os modos para salvar no JSON
+        const modesToSave: Record<string, string> = {};
+        Object.entries(goals).forEach(([key, val]) => {
+          modesToSave[key] = (val as any).mode;
+        });
+
         const { data: updatedRow, error } = await supabase
           .from('Meta_2')
           .update({
@@ -670,14 +750,46 @@ const App: React.FC = () => {
             Atendimento: goals.atendimento.value,
             Reunioes_Marcadas: goals.reuniaoMarcada.value,
             Reunioes_Realizadas: goals.reuniaoRealizada.value,
-            Vendas: goals.vendas.value
+            Vendas: goals.vendas.value,
+            Config: JSON.stringify({ modes: modesToSave })
           })
           .eq('id', idToUpdate)
           .select();
 
         if (error) {
-          console.error('Erro ao atualizar meta no Supabase:', error);
-          alert(`ERRO AO ATUALIZAR: ${error.message}`);
+          // Fallback se a coluna Config não existir
+          if (error.message.includes('Config')) {
+            const { data: retryRow, error: retryError } = await supabase
+              .from('Meta_2')
+              .update({
+                Orçamento: goals.amountSpent.value,
+                Leads: goals.leads.value,
+                CPL: goals.cpl.value,
+                CTR: goals.ctr.value,
+                CPM: goals.cpm.value,
+                Frequência: goals.frequency.value,
+                Quantidade: goals.quantity.value,
+                Mensagens_Enviadas: goals.mensagensEnviadas.value,
+                Atendimento: goals.atendimento.value,
+                Reunioes_Marcadas: goals.reuniaoMarcada.value,
+                Reunioes_Realizadas: goals.reuniaoRealizada.value,
+                Vendas: goals.vendas.value
+              })
+              .eq('id', idToUpdate)
+              .select();
+
+            if (retryError) {
+              console.error('Erro ao atualizar meta no Supabase:', retryError);
+              alert(`ERRO AO ATUALIZAR: ${retryError.message}`);
+            } else {
+              const finalRow = retryRow[0];
+              setGoalsHistory(prev => prev.map(row => row.id === idToUpdate ? finalRow : row));
+              alert(`✅ SUCESSO: Meta ID #${idToUpdate} atualizada (Sem persistência de modos).`);
+            }
+          } else {
+            console.error('Erro ao atualizar meta no Supabase:', error);
+            alert(`ERRO AO ATUALIZAR: ${error.message}`);
+          }
         } else {
           const finalRow = updatedRow[0];
           setGoalsHistory(prev => prev.map(row => row.id === idToUpdate ? finalRow : row));
@@ -692,19 +804,28 @@ const App: React.FC = () => {
 
   const handleSelectGoalRow = (row: any) => {
     setActiveGoalId(row.id);
+
+    let savedModes: any = {};
+    try {
+      if (row.Config) {
+        const config = typeof row.Config === 'string' ? JSON.parse(row.Config) : row.Config;
+        savedModes = config.modes || {};
+      }
+    } catch (e) { }
+
     const newGoals: DashboardGoals = {
-      amountSpent: { value: row.Orçamento || 0, mode: 'monthly' },
-      leads: { value: row.Leads || 0, mode: 'monthly' },
-      cpl: { value: row.CPL || 0, mode: 'fixed' },
-      ctr: { value: row.CTR || 0, mode: 'fixed' },
-      cpm: { value: row.CPM || 0, mode: 'fixed' },
-      frequency: { value: row.Frequência || 0, mode: 'fixed' },
-      quantity: { value: row.Quantidade || 0, mode: 'monthly' },
-      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: 'monthly' },
-      atendimento: { value: row.Atendimento || 0, mode: 'monthly' },
-      reuniaoMarcada: { value: row.Reunioes_Marcadas || 0, mode: 'monthly' },
-      reuniaoRealizada: { value: row.Reunioes_Realizadas || 0, mode: 'monthly' },
-      vendas: { value: row.Vendas || 0, mode: 'monthly' }
+      amountSpent: { value: row.Orçamento || 0, mode: savedModes.amountSpent || 'monthly' },
+      leads: { value: row.Leads || 0, mode: savedModes.leads || 'monthly' },
+      cpl: { value: row.CPL || 0, mode: savedModes.cpl || 'fixed' },
+      ctr: { value: row.CTR || 0, mode: savedModes.ctr || 'fixed' },
+      cpm: { value: row.CPM || 0, mode: savedModes.cpm || 'fixed' },
+      frequency: { value: row.Frequência || 0, mode: savedModes.frequency || 'fixed' },
+      quantity: { value: row.Quantidade || 0, mode: savedModes.quantity || 'monthly' },
+      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: savedModes.mensagensEnviadas || 'monthly' },
+      atendimento: { value: row.Atendimento || 0, mode: savedModes.atendimento || 'monthly' },
+      reuniaoMarcada: { value: row.Reunioes_Marcadas || row.Reuniao_Marcada || 0, mode: savedModes.reuniaoMarcada || 'monthly' },
+      reuniaoRealizada: { value: row.Reunioes_Realizadas || row.Reuniao_Realizada || 0, mode: savedModes.reuniaoRealizada || 'monthly' },
+      vendas: { value: row.Vendas || 0, mode: savedModes.vendas || 'monthly' }
     };
     setGoals(newGoals);
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(newGoals));
@@ -747,10 +868,10 @@ const App: React.FC = () => {
   const scaledGoals = useMemo(() => ({
     amountSpent: getScaledValue(goals.amountSpent),
     leads: getScaledValue(goals.leads),
-    cpl: goals.cpl.value,
-    ctr: goals.ctr.value,
-    cpm: goals.cpm.value,
-    frequency: goals.frequency.value,
+    cpl: getScaledValue(goals.cpl),
+    ctr: getScaledValue(goals.ctr),
+    cpm: getScaledValue(goals.cpm),
+    frequency: getScaledValue(goals.frequency),
     quantity: getScaledValue(goals.quantity),
     mensagensEnviadas: getScaledValue(goals.mensagensEnviadas),
     atendimento: getScaledValue(goals.atendimento),
@@ -765,12 +886,12 @@ const App: React.FC = () => {
 
     if (type === 'higher-better') {
       if (diff >= 1.1) return 'EXCELENTE';
-      if (diff >= 0.8) return 'MÉDIA';
+      if (diff >= 0.9) return 'MÉDIA';
       return 'OTIMIZAR';
     } else {
       // lower-better (like CPL, CPM, Spend)
       if (diff <= 0.9) return 'EXCELENTE';
-      if (diff <= 1.2) return 'MÉDIA';
+      if (diff <= 1.1) return 'MÉDIA';
       return 'OTIMIZAR';
     }
   };
@@ -1062,11 +1183,22 @@ const App: React.FC = () => {
       const isLost = sVendaNorm.includes('perd') || stageNormLocal.includes('perd');
       const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || lead.stage === 'Vendas Concluidas';
 
-      const matchesVendaStatus = selectedVendaStatus.length === 0
-        ? (!isLost && !isWon)
-        : (lead.statusVenda2 && selectedVendaStatus.includes(lead.statusVenda2));
+      const isActive = !isLost && !isWon;
 
-      const matchesPipeline = selectedPipelines.length === 0 || selectedPipelines.includes(lead.pipeline);
+      // Apply venda status filter
+      let matchesVendaStatus = true;
+      if (selectedVendaStatus === 'Atual') {
+        matchesVendaStatus = isActive;
+      } else if (selectedVendaStatus === 'Ganho') {
+        matchesVendaStatus = isWon;
+      } else if (selectedVendaStatus === 'Perdido') {
+        matchesVendaStatus = isLost;
+      }
+      // 'Todos' shows everything, so no filtering needed
+
+      const matchesPipeline = selectedPipelines.length === 0 ||
+        selectedPipelines.some(p => normalizeText(p) === normalizeText(lead.pipeline));
+
       return matchesSearch && matchesStage && matchesTags && matchesVendaStatus && matchesPipeline;
     });
   }, [data, salesSearch, selectedStage, selectedTags, selectedVendaStatus, selectedPipelines]);
@@ -1082,7 +1214,7 @@ const App: React.FC = () => {
     useEffect(() => { if (!isOpen) setSearchTerm(''); }, [isOpen]);
     const filteredOptions = useMemo(() => !searchTerm ? options : options.filter((opt: string) => normalizeText(opt).includes(normalizeText(searchTerm))), [options, searchTerm]);
     return (
-      <div ref={dropdownRef} className={`relative flex-1 min-w-[200px] bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-3 cursor-pointer group hover:border-blue-400 transition-all ${selected.length > 0 ? 'bg-blue-50/30' : ''}`} onClick={() => setIsOpen(!isOpen)}>
+      <div ref={dropdownRef} className={`relative flex-1 min-w-[130px] bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-2 cursor-pointer group hover:border-blue-400 transition-all ${selected.length > 0 ? 'bg-blue-50/30' : ''}`} onClick={() => setIsOpen(!isOpen)}>
         <div className={`p-2 rounded-lg transition-all ${selected.length > 0 ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
           <Icon size={16} />
         </div>
@@ -1589,18 +1721,20 @@ ${JSON.stringify(tabData, null, 2)}`
                 </div>
 
 
-                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
-                  <div className="flex flex-col md:flex-row flex-1 gap-3">
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col xl:flex-row items-stretch xl:items-center gap-2">
+                  <div className="flex flex-col md:flex-row flex-1 gap-2">
                     <FilterDropdown title="Campanhas" options={filterOptions.campaigns} selected={selectedCampaigns} onToggle={(camp: any) => toggleFilter(selectedCampaigns, setSelectedCampaigns, camp)} isOpen={isCampaignDropdownOpen} setIsOpen={setIsCampaignDropdownOpen} icon={Layers} dropdownRef={campaignRef} />
                     <FilterDropdown title="Conjuntos" options={filterOptions.adSets} selected={selectedAdSets} onToggle={(i: any) => toggleFilter(selectedAdSets, setSelectedAdSets, i)} isOpen={isAdSetDropdownOpen} setIsOpen={setIsAdSetDropdownOpen} icon={Layout} dropdownRef={adSetRef} />
                     <FilterDropdown title="Anúncios" options={filterOptions.ads} selected={selectedAds} onToggle={(i: any) => toggleFilter(selectedAds, setSelectedAds, i)} isOpen={isAdDropdownOpen} setIsOpen={setIsAdDropdownOpen} icon={Target} dropdownRef={adRef} />
+                    <FilterDropdown title="Pipeline" options={filterOptions.pipelines || []} selected={selectedPipelines} onToggle={(i: any) => toggleFilter(selectedPipelines, setSelectedPipelines, i)} isOpen={isPipelineDropdownOpen} setIsOpen={setIsPipelineDropdownOpen} icon={Briefcase} dropdownRef={overviewPipelineRef} />
                   </div>
+
                   <div className="h-px xl:h-10 w-full xl:w-px bg-slate-200 dark:bg-slate-700"></div>
-                  <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 p-2 sm:p-3 rounded-lg border border-slate-200 dark:border-slate-800 flex-shrink-0">
-                    <Calendar size={18} className="text-primary" />
-                    <div className="flex-1 flex gap-4">
-                      <div className="flex-1 min-w-[100px]"><p className="text-[10px] font-medium text-slate-400 mb-0.5 uppercase tracking-tighter">Início</p><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-[11px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer" /></div>
-                      <div className="flex-1 min-w-[100px]"><p className="text-[10px] font-medium text-slate-400 mb-0.5 uppercase tracking-tighter">Fim</p><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-transparent border-none text-[11px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer" /></div>
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-200 dark:border-slate-800 flex-shrink-0">
+                    <Calendar size={16} className="text-primary" />
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-[85px]"><p className="text-[10px] font-medium text-slate-400 mb-0.5 uppercase tracking-tighter">Início</p><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-[11px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer" /></div>
+                      <div className="flex-1 min-w-[85px]"><p className="text-[10px] font-medium text-slate-400 mb-0.5 uppercase tracking-tighter">Fim</p><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-transparent border-none text-[11px] sm:text-xs font-bold dark:text-white outline-none cursor-pointer" /></div>
                     </div>
                   </div>
                 </div>
@@ -1794,11 +1928,11 @@ ${JSON.stringify(tabData, null, 2)}`
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-800/50">
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 divide-x divide-y md:divide-y-0 divide-slate-100 dark:divide-slate-800/50">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 divide-x divide-y md:divide-y-0 divide-slate-100 dark:divide-slate-800/50">
                     {[
-                      { title: "Investimento", val: FORMATTERS.currency(data.metrics.totalSpend), icon: <DollarSign size={14} />, meta: FORMATTERS.currency(scaledGoals.amountSpent), status: statusMap.amountSpent },
-                      { title: "Alcance", val: FORMATTERS.number(data.metrics.marketingMetrics.reach), icon: <ReachIcon size={14} />, meta: "Único" },
-                      { title: "Impressões", val: FORMATTERS.number(data.metrics.marketingMetrics.impressions), icon: <ReachIcon size={14} />, meta: "Visualizações" },
+                      { title: "Investimento", val: FORMATTERS.summarizedCurrency(data.metrics.totalSpend), icon: <DollarSign size={14} />, meta: FORMATTERS.currency(scaledGoals.amountSpent), status: statusMap.amountSpent },
+                      { title: "Alcance", val: FORMATTERS.summarized(data.metrics.marketingMetrics.reach), icon: <ReachIcon size={14} />, meta: "Único" },
+                      { title: "Impressões", val: FORMATTERS.summarized(data.metrics.marketingMetrics.impressions), icon: <ReachIcon size={14} />, meta: "Visualizações" },
                       { title: "Frequência", val: data.metrics.marketingMetrics.frequency.toFixed(2), icon: <RefreshCw size={14} />, meta: scaledGoals.frequency.toFixed(1), status: statusMap.frequency },
                       { title: "CPM (Custo p/ Mil)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpm), icon: <Percent size={14} />, meta: FORMATTERS.currency(scaledGoals.cpm), status: statusMap.cpm }
                     ].map((kpi, idx) => (
@@ -1815,7 +1949,7 @@ ${JSON.stringify(tabData, null, 2)}`
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 divide-x divide-y md:divide-y-0 divide-slate-100 dark:divide-slate-800/50">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 divide-x divide-y md:divide-y-0 divide-slate-100 dark:divide-slate-800/50">
                     {[
                       { title: "Cliques", val: FORMATTERS.number(data.metrics.marketingMetrics.clicks), icon: <MousePointer2 size={14} />, meta: "Cliques no Link" },
                       { title: "CPC (Custo p/ Click)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpc), icon: <DollarSign size={14} />, meta: "Custo Médio" },
@@ -1961,7 +2095,7 @@ ${JSON.stringify(tabData, null, 2)}`
                     onClick={() => setIsRevenueModalOpen(true)}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block text-emerald-500">
-                        {FORMATTERS.summarized(data.metrics.totalRevenue)}
+                        {FORMATTERS.summarizedCurrency(data.metrics.totalRevenue)}
                       </span>
                     }
                     meta="RECEITA AGREGADA"
@@ -1980,7 +2114,7 @@ ${JSON.stringify(tabData, null, 2)}`
                     })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
+                        {FORMATTERS.summarizedCurrency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
                       </span>
                     }
                     meta="VALOR MÉDIO"
@@ -1998,7 +2132,7 @@ ${JSON.stringify(tabData, null, 2)}`
                     })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {FORMATTERS.number(data.metrics.totalUnitsSold)}
+                        {FORMATTERS.summarized(data.metrics.totalUnitsSold)}
                       </span>
                     }
                     meta="PROGRESSO"
@@ -2152,7 +2286,40 @@ ${JSON.stringify(tabData, null, 2)}`
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <FilterDropdown title="Etiquetas" options={filterOptions.tags} selected={selectedTags} onToggle={(i: any) => toggleFilter(selectedTags, setSelectedTags, i)} isOpen={isSalesTagDropdownOpen} setIsOpen={setIsSalesTagDropdownOpen} icon={Grid} dropdownRef={tagRef} />
-                    <FilterDropdown title="Status Venda" options={filterOptions.vendaStatus} selected={selectedVendaStatus} onToggle={(i: any) => toggleFilter(selectedVendaStatus, setSelectedVendaStatus, i)} isOpen={isSalesVendaStatusDropdownOpen} setIsOpen={setIsSalesVendaStatusDropdownOpen} icon={Activity} dropdownRef={vendaStatusRef} allLabel="Atual" />
+
+                    {/* Status Venda - Custom Single Select */}
+                    <div ref={vendaStatusRef} className={`relative flex-1 min-w-[130px] bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-2 cursor-pointer group hover:border-blue-400 transition-all ${selectedVendaStatus !== 'Todos' ? 'bg-blue-50/30' : ''}`} onClick={() => setIsSalesVendaStatusDropdownOpen(!isSalesVendaStatusDropdownOpen)}>
+                      <div className={`p-2 rounded-lg transition-all ${selectedVendaStatus !== 'Todos' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
+                        <Activity size={16} />
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Status Venda</p>
+                        <p className={`text-xs font-black truncate ${selectedVendaStatus !== 'Todos' ? 'text-blue-600' : 'text-slate-700 dark:text-white'}`}>
+                          {selectedVendaStatus}
+                        </p>
+                      </div>
+                      <ChevronRight size={16} className={`text-slate-300 transition-transform ${isSalesVendaStatusDropdownOpen ? 'rotate-90' : ''} ${selectedVendaStatus !== 'Todos' ? 'text-blue-400' : ''}`} />
+                      {isSalesVendaStatusDropdownOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-full min-w-[200px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 p-3 animate-in fade-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                          <div className="space-y-0.5">
+                            {(['Todos', 'Atual', 'Ganho', 'Perdido'] as const).map((status) => (
+                              <button
+                                key={status}
+                                onClick={() => {
+                                  setSelectedVendaStatus(status);
+                                  setIsSalesVendaStatusDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${selectedVendaStatus === status ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400'}`}
+                              >
+                                <span>{status}</span>
+                                {selectedVendaStatus === status && <Check size={14} />}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <FilterDropdown title="Pipeline" options={filterOptions.pipelines || []} selected={selectedPipelines} onToggle={(i: any) => toggleFilter(selectedPipelines, setSelectedPipelines, i)} isOpen={isSalesPipelineDropdownOpen} setIsOpen={setIsSalesPipelineDropdownOpen} icon={Briefcase} dropdownRef={pipelineRef} />
                   </div>
 
@@ -2257,11 +2424,26 @@ ${JSON.stringify(tabData, null, 2)}`
                           const matchesTags = selectedTags.length === 0 ||
                             (lead.tags && lead.tags.some(tag => selectedTags.includes(tag)));
 
-                          const matchesVendaStatus = selectedVendaStatus.length === 0 ||
-                            (lead.statusVenda2 && selectedVendaStatus.includes(lead.statusVenda2));
+                          // Determine if lead is won, lost, or active
+                          const sVendaNorm = normalizeText(lead.statusVenda2);
+                          const stageNormLocal = normalizeText(lead.stage);
+                          const isLost = sVendaNorm.includes('perd') || stageNormLocal.includes('perd');
+                          const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || lead.stage === 'Vendas Concluidas';
+                          const isActive = !isLost && !isWon;
+
+                          // Apply venda status filter
+                          let matchesVendaStatus = true;
+                          if (selectedVendaStatus === 'Atual') {
+                            matchesVendaStatus = isActive;
+                          } else if (selectedVendaStatus === 'Ganho') {
+                            matchesVendaStatus = isWon;
+                          } else if (selectedVendaStatus === 'Perdido') {
+                            matchesVendaStatus = isLost;
+                          }
+                          // 'Todos' shows everything, so no filtering needed
 
                           const matchesPipeline = selectedPipelines.length === 0 ||
-                            selectedPipelines.includes(lead.pipeline);
+                            selectedPipelines.some(p => normalizeText(p) === normalizeText(lead.pipeline));
 
                           return matchesSearch && matchesTags && matchesVendaStatus && matchesPipeline;
                         });
@@ -2302,7 +2484,7 @@ ${JSON.stringify(tabData, null, 2)}`
 
                               <div className="flex items-center justify-between">
                                 <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                                  R$ {stage.value ? stage.value.toLocaleString('pt-BR') : '0'}
+                                  {FORMATTERS.summarizedCurrency(stage.value || 0)}
                                 </div>
                                 <div className="text-[10px] text-slate-400 font-medium">
                                   {percentage}%

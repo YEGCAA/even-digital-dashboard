@@ -50,11 +50,26 @@ export const FORMATTERS = {
 
   summarized: (value: number) => {
     if (value >= 1_000_000) {
-      return (value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' milhões';
+      return (value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi';
     }
     if (value >= 1_000) {
       return (value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
     }
     return value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  },
+
+  summarizedCurrency: (value: number) => {
+    if (value >= 1_000_000) {
+      return 'R$ ' + (value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi';
+    }
+    if (value >= 1_000) {
+      return 'R$ ' + (value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+    }
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
   },
 };
