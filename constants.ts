@@ -50,20 +50,26 @@ export const FORMATTERS = {
 
   summarized: (value: number) => {
     if (value >= 1_000_000) {
-      return (value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi';
+      // Trunca em 2 casas decimais sem arredondar para cima
+      const truncated = Math.floor((value / 1_000_000) * 100) / 100;
+      return truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' mi';
     }
     if (value >= 1_000) {
-      return (value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+      // Trunca em 1 casa decimal
+      const truncated = Math.floor((value / 1_000) * 10) / 10;
+      return truncated.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' mil';
     }
     return value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   },
 
   summarizedCurrency: (value: number) => {
     if (value >= 1_000_000) {
-      return 'R$ ' + (value / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi';
+      const truncated = Math.floor((value / 1_000_000) * 100) / 100;
+      return 'R$ ' + truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' mi';
     }
     if (value >= 1_000) {
-      return 'R$ ' + (value / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+      const truncated = Math.floor((value / 1_000) * 10) / 10;
+      return 'R$ ' + truncated.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' mil';
     }
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
