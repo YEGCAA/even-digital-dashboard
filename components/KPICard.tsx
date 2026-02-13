@@ -1,5 +1,7 @@
 
 import React from 'react';
+import { useCountAnimation } from '../hooks/useCountAnimation';
+
 
 export type KPITrend = 'up' | 'down' | 'neutral';
 export type KPIStatus = 'EXCELENTE' | 'MÉDIA' | 'OTIMIZAR' | 'BOM' | 'RUIM' | undefined;
@@ -33,6 +35,97 @@ export const KPICard: React.FC<KPICardProps> = ({
   statusTag,
   onClick
 }) => {
+  // Extract numeric value for animation
+  const getNumericValue = (val: string | number): number => {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+      // Remove currency symbols and spaces
+      let cleaned = val.replace(/[R$\s]/g, '');
+
+      // Check for multipliers BEFORE extracting the number
+      let multiplier = 1;
+      if (cleaned.toLowerCase().includes('mi')) {
+        multiplier = 1000000; // milhões
+        cleaned = cleaned.replace(/mi/gi, '');
+      } else if (cleaned.toLowerCase().includes('mil')) {
+        multiplier = 1000;
+        cleaned = cleaned.replace(/mil/gi, '');
+      }
+
+      // Remove percentage sign if exists
+      cleaned = cleaned.replace(/%/g, '');
+
+      // Normalize decimal separator (replace comma with dot)
+      const normalized = cleaned.replace(',', '.');
+      const baseValue = parseFloat(normalized) || 0;
+
+      return baseValue * multiplier;
+    }
+    return 0;
+  };
+
+  const numericValue = getNumericValue(value);
+  const numericMetaValue = metaValue ? getNumericValue(metaValue) : 0;
+
+  // Determine decimal places based on value
+  const getDecimals = (val: number): number => {
+    if (val === 0) return 0;
+    if (val < 10) return 2;
+    if (val < 100) return 1;
+    return 0;
+  };
+
+  // Animate the values
+  const animatedValue = useCountAnimation(numericValue, {
+    duration: 1500,
+    decimals: getDecimals(numericValue)
+  });
+  const animatedMetaValue = useCountAnimation(numericMetaValue, {
+    duration: 1500,
+    decimals: getDecimals(numericMetaValue)
+  });
+
+  // Format the animated value back to match the original format
+  const getFormattedValue = (original: string | number, animated: number): string | number => {
+    if (typeof original === 'number') return animated;
+    if (typeof original === 'string') {
+      const originalStr = original;
+
+      // Detect "Mi" (milhões) - usado em summarized
+      if (originalStr.toLowerCase().includes('mi') && !originalStr.toLowerCase().includes('mil')) {
+        const hasRS = originalStr.includes('R$');
+        const divided = animated / 1000000;
+        const formatted = divided.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+        return hasRS ? `R$ ${formatted} Mi` : `${formatted} Mi`;
+      }
+
+      // Detect "mil" - usado em summarized
+      if (originalStr.toLowerCase().includes('mil')) {
+        const hasRS = originalStr.includes('R$');
+        const divided = animated / 1000;
+        const formatted = divided.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+        return hasRS ? `R$ ${formatted} mil` : `${formatted} mil`;
+      }
+
+      // Detect currency (R$)
+      if (originalStr.includes('R$')) {
+        return `R$ ${animated.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+
+      // Detect percentage
+      if (originalStr.includes('%')) {
+        return `${animated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`;
+      }
+
+      // Default: just return the number formatted
+      return animated.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+    return animated;
+  };
+
+  const displayValue = typeof value === 'object' ? value : getFormattedValue(value, animatedValue);
+  const displayMetaValue = metaValue ? getFormattedValue(metaValue, animatedMetaValue) : metaValue;
+
   const getIconBgColor = () => {
     if (!statusTag) {
       if (!trend || trend === 'neutral') return 'bg-blue-50 dark:bg-blue-900/10';
@@ -86,7 +179,7 @@ export const KPICard: React.FC<KPICardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`bg-white dark:bg-slate-800 rounded-xl p-5 card-shadow hover:shadow-md transition-all border border-slate-100 dark:border-slate-700 h-full flex flex-col justify-between ${getAccentClass()} ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
+      className={`bg-white dark:bg-slate-800 rounded-xl p-5 card-shadow hover:shadow-md transition-all border border-slate-100 dark:border-slate-700 h-full flex flex-col justify-between animate-slide-up ${getAccentClass()} ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
     >
       <div>
         {/* Header com título e ícone */}
@@ -100,7 +193,7 @@ export const KPICard: React.FC<KPICardProps> = ({
         {/* Valor principal */}
         <div className="flex items-center gap-3">
           <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white leading-tight break-words">
-            {typeof value === 'object' ? value : value}
+            {displayValue}
           </h3>
           {statusTag && <StatusBadge status={statusTag} />}
         </div>
@@ -111,7 +204,7 @@ export const KPICard: React.FC<KPICardProps> = ({
         {meta && (
           <div className="flex items-center gap-1.5">
             <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></div>
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{meta}: <span className="text-slate-600 dark:text-slate-300 font-bold ml-1">{metaValue}</span></p>
+            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{meta}: <span className="text-slate-600 dark:text-slate-300 font-bold ml-1">{displayMetaValue}</span></p>
           </div>
         )}
         {trend && (

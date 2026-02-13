@@ -52,7 +52,7 @@ export const FORMATTERS = {
     if (value >= 1_000_000) {
       // Trunca em 2 casas decimais sem arredondar para cima
       const truncated = Math.floor((value / 1_000_000) * 100) / 100;
-      return truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' mi';
+      return truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' Mi';
     }
     if (value >= 1_000) {
       // Trunca em 1 casa decimal
@@ -65,7 +65,7 @@ export const FORMATTERS = {
   summarizedCurrency: (value: number) => {
     if (value >= 1_000_000) {
       const truncated = Math.floor((value / 1_000_000) * 100) / 100;
-      return 'R$ ' + truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' mi';
+      return 'R$ ' + truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' Mi';
     }
     if (value >= 1_000) {
       const truncated = Math.floor((value / 1_000) * 10) / 10;

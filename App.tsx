@@ -97,18 +97,18 @@ const App: React.FC = () => {
   const [goals, setGoals] = useState<DashboardGoals>(() => {
     const saved = localStorage.getItem(`even_goals_${currentUser?.id || 'default'}`);
     const defaultGoals = {
-      amountSpent: { value: 0, mode: 'monthly' as GoalMode },
-      leads: { value: 0, mode: 'monthly' as GoalMode },
+      amountSpent: { value: 0, mode: 'fixed' as GoalMode },
+      leads: { value: 0, mode: 'fixed' as GoalMode },
       cpl: { value: 0, mode: 'fixed' as GoalMode },
       ctr: { value: 0, mode: 'fixed' as GoalMode },
       cpm: { value: 0, mode: 'fixed' as GoalMode },
       frequency: { value: 0, mode: 'fixed' as GoalMode },
-      quantity: { value: 0, mode: 'monthly' as GoalMode },
-      mensagensEnviadas: { value: 0, mode: 'monthly' as GoalMode },
-      atendimento: { value: 0, mode: 'monthly' as GoalMode },
-      reuniaoMarcada: { value: 0, mode: 'monthly' as GoalMode },
-      reuniaoRealizada: { value: 0, mode: 'monthly' as GoalMode },
-      vendas: { value: 0, mode: 'monthly' as GoalMode }
+      quantity: { value: 0, mode: 'fixed' as GoalMode },
+      mensagensEnviadas: { value: 0, mode: 'fixed' as GoalMode },
+      atendimento: { value: 0, mode: 'fixed' as GoalMode },
+      reuniaoMarcada: { value: 0, mode: 'fixed' as GoalMode },
+      reuniaoRealizada: { value: 0, mode: 'fixed' as GoalMode },
+      vendas: { value: 0, mode: 'fixed' as GoalMode }
     };
 
     if (saved) {
@@ -118,11 +118,14 @@ const App: React.FC = () => {
         return {
           ...defaultGoals,
           ...parsed,
-          mensagensEnviadas: parsed.mensagensEnviadas || defaultGoals.mensagensEnviadas,
-          atendimento: parsed.atendimento || defaultGoals.atendimento,
-          reuniaoMarcada: parsed.reuniaoMarcada || defaultGoals.reuniaoMarcada,
-          reuniaoRealizada: parsed.reuniaoRealizada || defaultGoals.reuniaoRealizada,
-          vendas: parsed.vendas || defaultGoals.vendas
+          amountSpent: { value: parsed.amountSpent?.value || 0, mode: 'fixed' },
+          leads: { value: parsed.leads?.value || 0, mode: 'fixed' },
+          quantity: { value: parsed.quantity?.value || 0, mode: 'fixed' },
+          mensagensEnviadas: { value: parsed.mensagensEnviadas?.value || 0, mode: 'fixed' },
+          atendimento: { value: parsed.atendimento?.value || 0, mode: 'fixed' },
+          reuniaoMarcada: { value: parsed.reuniaoMarcada?.value || 0, mode: 'fixed' },
+          reuniaoRealizada: { value: parsed.reuniaoRealizada?.value || 0, mode: 'fixed' },
+          vendas: { value: parsed.vendas?.value || 0, mode: 'fixed' }
         };
       } catch (e) {
         console.error('Erro ao carregar metas do localStorage:', e);
@@ -207,29 +210,11 @@ const App: React.FC = () => {
       </div>
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Valor Alvo</label>
+          <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Valor Alvo (FIXO)</label>
           <GoalInput
             value={goals[metricKey].value}
             onChange={(val) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: val } })}
           />
-        </div>
-        <div>
-          <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Modo de Cálculo</label>
-          <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl">
-            {(['daily', 'monthly', 'fixed'] as GoalMode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => currentUser?.role === 'admin' && setGoals({ ...goals, [metricKey]: { ...goals[metricKey], mode: m } })}
-                disabled={currentUser?.role !== 'admin'}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${goals[metricKey].mode === m
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                  } ${currentUser?.role !== 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {m === 'daily' ? 'Diário' : m === 'monthly' ? 'Mensal' : 'Fixo'}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>
@@ -414,18 +399,18 @@ const App: React.FC = () => {
             } catch (e) { }
 
             setGoals({
-              amountSpent: { value: latest.Orçamento || 0, mode: savedModes.amountSpent || 'monthly' },
-              leads: { value: latest.Leads || 0, mode: savedModes.leads || 'monthly' },
-              cpl: { value: latest.CPL || 0, mode: savedModes.cpl || 'fixed' },
-              ctr: { value: latest.CTR || 0, mode: savedModes.ctr || 'fixed' },
-              cpm: { value: latest.CPM || 0, mode: savedModes.cpm || 'fixed' },
-              frequency: { value: latest.Frequência || 0, mode: savedModes.frequency || 'fixed' },
-              quantity: { value: latest.Quantidade || 0, mode: savedModes.quantity || 'monthly' },
-              mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: savedModes.mensagensEnviadas || 'monthly' },
-              atendimento: { value: latest.Atendimento || 0, mode: savedModes.atendimento || 'monthly' },
-              reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: savedModes.reuniaoMarcada || 'monthly' },
-              reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: savedModes.reuniaoRealizada || 'monthly' },
-              vendas: { value: latest.Vendas || 0, mode: savedModes.vendas || 'monthly' }
+              amountSpent: { value: latest.Orçamento || 0, mode: 'fixed' },
+              leads: { value: latest.Leads || 0, mode: 'fixed' },
+              cpl: { value: latest.CPL || 0, mode: 'fixed' },
+              ctr: { value: latest.CTR || 0, mode: 'fixed' },
+              cpm: { value: latest.CPM || 0, mode: 'fixed' },
+              frequency: { value: latest.Frequência || 0, mode: 'fixed' },
+              quantity: { value: latest.Quantidade || 0, mode: 'fixed' },
+              mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'fixed' },
+              atendimento: { value: latest.Atendimento || 0, mode: 'fixed' },
+              reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: 'fixed' },
+              reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: 'fixed' },
+              vendas: { value: latest.Vendas || 0, mode: 'fixed' }
             });
           }
         } else if (error) {
@@ -595,18 +580,18 @@ const App: React.FC = () => {
         } else {
           // Reset local state
           const resetGoals: DashboardGoals = {
-            amountSpent: { value: 0, mode: 'monthly' },
-            leads: { value: 0, mode: 'monthly' },
+            amountSpent: { value: 0, mode: 'fixed' },
+            leads: { value: 0, mode: 'fixed' },
             cpl: { value: 0, mode: 'fixed' },
             ctr: { value: 0, mode: 'fixed' },
             cpm: { value: 0, mode: 'fixed' },
             frequency: { value: 0, mode: 'fixed' },
-            quantity: { value: 0, mode: 'monthly' },
-            mensagensEnviadas: { value: 0, mode: 'monthly' },
-            atendimento: { value: 0, mode: 'monthly' },
-            reuniaoMarcada: { value: 0, mode: 'monthly' },
-            reuniaoRealizada: { value: 0, mode: 'monthly' },
-            vendas: { value: 0, mode: 'monthly' }
+            quantity: { value: 0, mode: 'fixed' },
+            mensagensEnviadas: { value: 0, mode: 'fixed' },
+            atendimento: { value: 0, mode: 'fixed' },
+            reuniaoMarcada: { value: 0, mode: 'fixed' },
+            reuniaoRealizada: { value: 0, mode: 'fixed' },
+            vendas: { value: 0, mode: 'fixed' }
           };
           setGoals(resetGoals);
           localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
@@ -618,18 +603,18 @@ const App: React.FC = () => {
     } else {
       // For local-only users
       const resetGoals: DashboardGoals = {
-        amountSpent: { value: 0, mode: 'monthly' },
-        leads: { value: 0, mode: 'monthly' },
+        amountSpent: { value: 0, mode: 'fixed' },
+        leads: { value: 0, mode: 'fixed' },
         cpl: { value: 0, mode: 'fixed' },
         ctr: { value: 0, mode: 'fixed' },
         cpm: { value: 0, mode: 'fixed' },
         frequency: { value: 0, mode: 'fixed' },
-        quantity: { value: 0, mode: 'monthly' },
-        mensagensEnviadas: { value: 0, mode: 'monthly' },
-        atendimento: { value: 0, mode: 'monthly' },
-        reuniaoMarcada: { value: 0, mode: 'monthly' },
-        reuniaoRealizada: { value: 0, mode: 'monthly' },
-        vendas: { value: 0, mode: 'monthly' }
+        quantity: { value: 0, mode: 'fixed' },
+        mensagensEnviadas: { value: 0, mode: 'fixed' },
+        atendimento: { value: 0, mode: 'fixed' },
+        reuniaoMarcada: { value: 0, mode: 'fixed' },
+        reuniaoRealizada: { value: 0, mode: 'fixed' },
+        vendas: { value: 0, mode: 'fixed' }
       };
       setGoals(resetGoals);
       localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
@@ -814,18 +799,18 @@ const App: React.FC = () => {
     } catch (e) { }
 
     const newGoals: DashboardGoals = {
-      amountSpent: { value: row.Orçamento || 0, mode: savedModes.amountSpent || 'monthly' },
-      leads: { value: row.Leads || 0, mode: savedModes.leads || 'monthly' },
-      cpl: { value: row.CPL || 0, mode: savedModes.cpl || 'fixed' },
-      ctr: { value: row.CTR || 0, mode: savedModes.ctr || 'fixed' },
-      cpm: { value: row.CPM || 0, mode: savedModes.cpm || 'fixed' },
-      frequency: { value: row.Frequência || 0, mode: savedModes.frequency || 'fixed' },
-      quantity: { value: row.Quantidade || 0, mode: savedModes.quantity || 'monthly' },
-      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: savedModes.mensagensEnviadas || 'monthly' },
-      atendimento: { value: row.Atendimento || 0, mode: savedModes.atendimento || 'monthly' },
-      reuniaoMarcada: { value: row.Reunioes_Marcadas || row.Reuniao_Marcada || 0, mode: savedModes.reuniaoMarcada || 'monthly' },
-      reuniaoRealizada: { value: row.Reunioes_Realizadas || row.Reuniao_Realizada || 0, mode: savedModes.reuniaoRealizada || 'monthly' },
-      vendas: { value: row.Vendas || 0, mode: savedModes.vendas || 'monthly' }
+      amountSpent: { value: row.Orçamento || 0, mode: 'fixed' },
+      leads: { value: row.Leads || 0, mode: 'fixed' },
+      cpl: { value: row.CPL || 0, mode: 'fixed' },
+      ctr: { value: row.CTR || 0, mode: 'fixed' },
+      cpm: { value: row.CPM || 0, mode: 'fixed' },
+      frequency: { value: row.Frequência || 0, mode: 'fixed' },
+      quantity: { value: row.Quantidade || 0, mode: 'fixed' },
+      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: 'fixed' },
+      atendimento: { value: row.Atendimento || 0, mode: 'fixed' },
+      reuniaoMarcada: { value: row.Reunioes_Marcadas || row.Reuniao_Marcada || 0, mode: 'fixed' },
+      reuniaoRealizada: { value: row.Reunioes_Realizadas || row.Reuniao_Realizada || 0, mode: 'fixed' },
+      vendas: { value: row.Vendas || 0, mode: 'fixed' }
     };
     setGoals(newGoals);
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(newGoals));
@@ -856,13 +841,8 @@ const App: React.FC = () => {
   };
 
   const getScaledValue = (metric: { value: number; mode: GoalMode }) => {
-    if (!startDate || !endDate || metric.mode === 'fixed') return metric.value;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    const factor = metric.mode === 'monthly' ? (diffDays / 30) : diffDays;
-    return metric.value * factor;
+    // Sempre retorna o valor fixo, sem escalonamento
+    return metric.value;
   };
 
   const scaledGoals = useMemo(() => ({
@@ -880,32 +860,34 @@ const App: React.FC = () => {
     vendas: getScaledValue(goals.vendas)
   }), [goals, startDate, endDate]);
 
-  const calculateStatus = (actual: number, target: number, type: 'higher-better' | 'lower-better'): KPIStatus => {
+  const calculateStatus = (actual: number, target: number, type: 'higher-better' | 'lower-better', mode?: GoalMode): KPIStatus => {
     if (target === 0) return undefined;
+
     const diff = (actual / target);
 
     if (type === 'higher-better') {
-      if (diff >= 1.1) return 'EXCELENTE';
-      if (diff >= 0.9) return 'MÉDIA';
-      return 'OTIMIZAR';
+      // Quanto maior, melhor (Leads, CTR, etc)
+      if (diff >= 1.0) return 'EXCELENTE';   // >= 100% da meta - ATINGIU ou SUPEROU
+      if (diff >= 0.90) return 'MÉDIA';      // >= 90% da meta - PRÓXIMO
+      return 'OTIMIZAR';                      // < 90% da meta - PRECISA MELHORAR
     } else {
-      // lower-better (like CPL, CPM, Spend)
-      if (diff <= 0.9) return 'EXCELENTE';
-      if (diff <= 1.1) return 'MÉDIA';
-      return 'OTIMIZAR';
+      // Quanto menor, melhor (CPL, CPM, Gastos, etc)
+      if (diff <= 1.0) return 'EXCELENTE';   // <= 100% da meta - ATINGIU ou FICOU ABAIXO
+      if (diff <= 1.10) return 'MÉDIA';      // <= 110% da meta - PRÓXIMO
+      return 'OTIMIZAR';                      // > 110% da meta - PRECISA MELHORAR
     }
   };
 
   const statusMap = useMemo(() => {
     if (!data) return {};
     return {
-      amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better'),
-      leads: calculateStatus(data.metrics.totalLeads, scaledGoals.leads, 'higher-better'),
-      cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better'),
-      ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better'),
-      cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better'),
-      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better'),
-      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better'),
+      amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better', goals.amountSpent.mode),
+      leads: calculateStatus(data.metrics.marketingMetrics.leads, scaledGoals.leads, 'higher-better', goals.leads.mode),
+      cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
+      ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
+      cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
+      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
+      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
       mensagensEnviadas: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
         const stage = data.funnelData?.find(s => {
@@ -914,7 +896,7 @@ const App: React.FC = () => {
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
         });
         const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.mensagensEnviadas, 'higher-better');
+        return calculateStatus(actualPercent, scaledGoals.mensagensEnviadas, 'higher-better', goals.mensagensEnviadas.mode);
       })(),
       atendimento: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
@@ -924,7 +906,7 @@ const App: React.FC = () => {
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
         });
         const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.atendimento, 'higher-better');
+        return calculateStatus(actualPercent, scaledGoals.atendimento, 'higher-better', goals.atendimento.mode);
       })(),
       reuniaoMarcada: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
@@ -934,7 +916,7 @@ const App: React.FC = () => {
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
         });
         const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.reuniaoMarcada, 'higher-better');
+        return calculateStatus(actualPercent, scaledGoals.reuniaoMarcada, 'higher-better', goals.reuniaoMarcada.mode);
       })(),
       reuniaoRealizada: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
@@ -944,7 +926,7 @@ const App: React.FC = () => {
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
         });
         const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.reuniaoRealizada, 'higher-better');
+        return calculateStatus(actualPercent, scaledGoals.reuniaoRealizada, 'higher-better', goals.reuniaoRealizada.mode);
       })(),
       vendas: (() => {
         const totalLeadsCount = data.leadsList.length || 1;
@@ -954,7 +936,7 @@ const App: React.FC = () => {
           return sNorm.includes(tNorm) || tNorm.includes(sNorm);
         });
         const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better');
+        return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better', goals.vendas.mode);
       })()
     };
   }, [data, scaledGoals]);
@@ -1072,8 +1054,9 @@ const App: React.FC = () => {
 
       if (normalizeStr(stage.stage).includes('vendasconcluidas') ||
         normalizeStr(stage.stage).includes('vendasconcluida') ||
-        normalizeStr(stage.stage).includes('vendaconcluida')) {
-        // Vendas Concluidas: count ONLY leads exactly in this stage (summing quantities)
+        normalizeStr(stage.stage).includes('vendaconcluida') ||
+        normalizeStr(stage.stage).includes('perdido')) {
+        // Vendas Concluidas & Perdido: count ONLY leads exactly in this stage (summing quantities)
         cumulativeCount = leadsWithIndex
           .filter(lead => lead.stageIndex === stageIndex)
           .reduce((sum, lead) => sum + (lead.quantity || 1), 0);
@@ -1397,12 +1380,128 @@ ${JSON.stringify(tabData, null, 2)}`
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-4 font-sans border-t-4 border-primary shadow-2xl">
-        <div className="w-full max-w-[440px] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 lg:p-12 flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 border border-slate-100 dark:border-slate-800">
-          <img src={ASSETS.LOGO} alt="Even" className="h-20 mb-4 animate-pulse drop-shadow-lg" />
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-1 uppercase tracking-tighter italic">Even <span className="text-primary tracking-normal not-italic font-bold">Digital</span></h1>
-          <p className="text-xs text-slate-400 mb-10 font-bold uppercase tracking-widest opacity-60">Performance Reporting Center</p>
-          <form onSubmit={async (e) => { e.preventDefault(); setLoginError(''); setIsLoggingIn(true); try { const { data: userRows, error } = await supabase.from('Logins Even').select('*').eq('user', loginForm.username).eq('senha', loginForm.password).single(); if (error || !userRows) { setLoginError('Acesso inválido.'); setIsLoggingIn(false); return; } const authUser: UserAuth = { id: userRows.id, username: userRows.user, role: userRows.user === 'admin' ? 'admin' : 'user' }; localStorage.setItem('even_auth', 'true'); localStorage.setItem('even_user', JSON.stringify(authUser)); setCurrentUser(authUser); setIsAuthenticated(true); } catch (err) { setLoginError('Erro de conexão.'); } finally { setIsLoggingIn(false); } }} className="w-full space-y-5"><div className="space-y-2"><label className="text-sm font-semibold text-slate-600 ml-1">Usuário</label><input type="text" placeholder="Digite seu usuário" required className="w-full px-6 py-4 bg-[#333333] border-none rounded-xl text-sm font-medium text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary/50 transition-all" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} /></div><div className="space-y-2"><label className="text-sm font-semibold text-slate-600 ml-1">Senha</label><div className="relative w-full"><input type={showPassword ? "text" : "password"} placeholder="********" required className="w-full px-6 py-4 bg-[#333333] border-none rounded-xl text-sm font-medium text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-primary/50 transition-all pr-12" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>{loginError && <div className="text-rose-500 text-[11px] font-bold text-center bg-rose-50 py-2 rounded-lg">{loginError}</div>}<button type="submit" disabled={isLoggingIn} className="w-full py-4 mt-4 bg-primary hover:bg-primary-600 text-white rounded-xl font-bold text-base shadow-lg shadow-primary/30 flex items-center justify-center gap-2 transition-all">{isLoggingIn ? <Loader2 className="animate-spin" size={20} /> : "Acessar Dashboard"}</button></form>
+      <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-900 via-slate-900 to-slate-950 p-4 font-sans">
+        {/* Animated background gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-purple-500/20 animate-pulse opacity-50"></div>
+
+        {/* Floating particles */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          <div className="absolute top-1/2 left-1/2 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+        </div>
+
+        {/* Login card */}
+        <div className="relative w-full max-w-[440px] bg-white/10 dark:bg-slate-900/30 backdrop-blur-xl rounded-3xl shadow-2xl p-8 lg:p-12 flex flex-col items-center animate-in fade-in zoom-in-95 slide-in-from-bottom-8 duration-700 border border-white/20 dark:border-slate-700/50">
+          {/* Logo with glow effect */}
+          <div className="relative mb-4">
+            <div className="absolute inset-0 blur-xl bg-primary/50 rounded-full animate-pulse"></div>
+            <img src={ASSETS.LOGO} alt="Even" className="relative h-20 animate-in zoom-in duration-1000 drop-shadow-2xl" />
+          </div>
+
+          <h1 className="text-3xl font-black text-white mb-1 uppercase tracking-tighter italic animate-in slide-in-from-top duration-700" style={{ animationDelay: '200ms' }}>
+            Even <span className="text-primary tracking-normal not-italic font-bold">Digital</span>
+          </h1>
+
+          <p className="text-xs text-slate-300 mb-10 font-bold uppercase tracking-widest opacity-80 animate-in slide-in-from-top duration-700" style={{ animationDelay: '300ms' }}>
+            Performance Reporting Center
+          </p>
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setLoginError('');
+              setIsLoggingIn(true);
+              try {
+                const { data: userRows, error } = await supabase.from('Logins Even').select('*').eq('user', loginForm.username).eq('senha', loginForm.password).single();
+                if (error || !userRows) {
+                  setLoginError('Acesso inválido.');
+                  setIsLoggingIn(false);
+                  return;
+                }
+                const authUser: UserAuth = {
+                  id: userRows.id,
+                  username: userRows.user,
+                  role: userRows.user === 'admin' ? 'admin' : 'user'
+                };
+                localStorage.setItem('even_auth', 'true');
+                localStorage.setItem('even_user', JSON.stringify(authUser));
+                setCurrentUser(authUser);
+                setIsAuthenticated(true);
+              } catch (err) {
+                setLoginError('Erro de conexão.');
+              } finally {
+                setIsLoggingIn(false);
+              }
+            }}
+            className="w-full space-y-5 animate-in slide-in-from-bottom duration-700"
+            style={{ animationDelay: '400ms' }}
+          >
+            {/* Username field */}
+            <div className="space-y-2 group">
+              <label className="text-sm font-semibold text-slate-200 ml-1">Usuário</label>
+              <input
+                type="text"
+                placeholder="Digite seu usuário"
+                required
+                className="w-full px-6 py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl text-sm font-medium text-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 focus:bg-white/10 transition-all duration-300 hover:bg-white/10"
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+              />
+            </div>
+
+            {/* Password field */}
+            <div className="space-y-2 group">
+              <label className="text-sm font-semibold text-slate-200 ml-1">Senha</label>
+              <div className="relative w-full">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="********"
+                  required
+                  className="w-full px-6 py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl text-sm font-medium text-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 focus:bg-white/10 transition-all duration-300 hover:bg-white/10 pr-12"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-all duration-300 hover:scale-110"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error message */}
+            {loginError && (
+              <div className="text-rose-300 text-[11px] font-bold text-center bg-rose-500/20 backdrop-blur-sm py-3 rounded-lg border border-rose-500/30 animate-in slide-in-from-top duration-300">
+                {loginError}
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-4 mt-4 bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl font-bold text-base shadow-lg shadow-primary/50 flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/60 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              {isLoggingIn ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  <span>Entrando...</span>
+                </>
+              ) : (
+                "Acessar Dashboard"
+              )}
+            </button>
+          </form>
+
+          {/* Decorative bottom accent */}
+          <div className="mt-8 flex items-center gap-2 opacity-50">
+            <div className="h-px w-8 bg-gradient-to-r from-transparent to-slate-400"></div>
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+            <div className="h-px w-8 bg-gradient-to-l from-transparent to-slate-400"></div>
+          </div>
         </div>
       </div>
     );
@@ -1670,14 +1769,14 @@ ${JSON.stringify(tabData, null, 2)}`
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <KPICard
                     title="VGV Gerenciado"
-                    value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.clientInfo.vgv)}</span>}
+                    value={FORMATTERS.summarizedCurrency(data.clientInfo.vgv)}
                     meta="FONTE DE DADOS"
                     metaValue="Base Dados"
                     icon={<TrendingUp size={16} />}
                   />
                   <KPICard
                     title="Vendas Concluídas"
-                    value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.metrics.totalRevenue)}</span>}
+                    value={FORMATTERS.summarizedCurrency(data.metrics.totalRevenue)}
                     meta="STATUS ATUAL"
                     metaValue="VGV Realizado"
                     icon={<ShoppingBag size={16} />}
@@ -1685,7 +1784,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Vendas / VGV"
-                    value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.percent((data.metrics.totalRevenue / (data.clientInfo.vgv || 1)) * 100)}</span>}
+                    value={FORMATTERS.percent((data.metrics.totalRevenue / (data.clientInfo.vgv || 1)) * 100)}
                     meta="TAXA DE SUCESSO"
                     metaValue="Performance"
                     icon={<Percent size={16} />}
@@ -1695,26 +1794,26 @@ ${JSON.stringify(tabData, null, 2)}`
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <KPICard
                     title="Investimento em Mídia"
-                    value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.metrics.totalSpend)}</span>}
-                    meta="META MENSAL"
-                    metaValue={FORMATTERS.currency(scaledGoals.amountSpent)}
+                    value={FORMATTERS.summarizedCurrency(data.metrics.totalSpend)}
+                    meta={goals.amountSpent.value > 0 ? (goals.amountSpent.mode === 'fixed' ? "META FIXA" : "META MENSAL") : undefined}
+                    metaValue={goals.amountSpent.value > 0 ? FORMATTERS.currency(scaledGoals.amountSpent) : undefined}
                     icon={<DollarSign size={16} />}
                     statusTag={statusMap.amountSpent}
                     inverseColors={true}
                   />
                   <KPICard
                     title="Total de Leads"
-                    value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.number(data.metrics.marketingMetrics.leads)}</span>}
-                    meta="META MENSAL"
-                    metaValue={FORMATTERS.number(scaledGoals.leads)}
+                    value={FORMATTERS.number(data.metrics.marketingMetrics.leads)}
+                    meta={goals.leads.value > 0 ? (goals.leads.mode === 'fixed' ? "META FIXA" : "META MENSAL") : undefined}
+                    metaValue={goals.leads.value > 0 ? FORMATTERS.number(scaledGoals.leads) : undefined}
                     icon={<RefreshCw size={16} />}
                     statusTag={statusMap.leads}
                   />
                   <KPICard
                     title="CPL Médio"
-                    value={<span className="text-xl sm:text-2xl font-black tracking-tighter block">{FORMATTERS.currency(data.metrics.marketingMetrics.cpl)}</span>}
-                    meta="META CPL"
-                    metaValue={FORMATTERS.currency(scaledGoals.cpl)}
+                    value={FORMATTERS.summarizedCurrency(data.metrics.marketingMetrics.cpl)}
+                    meta={goals.cpl.value > 0 ? "META CPL" : undefined}
+                    metaValue={goals.cpl.value > 0 ? FORMATTERS.currency(scaledGoals.cpl) : undefined}
                     icon={<CplIcon size={16} />}
                     statusTag={statusMap.cpl}
                   />
@@ -1945,7 +2044,11 @@ ${JSON.stringify(tabData, null, 2)}`
                           <span className="text-sm sm:text-base lg:text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">{kpi.val}</span>
                           {kpi.status && <StatusBadge status={kpi.status} />}
                         </div>
-                        <div className="mt-1.5 text-[10px] text-slate-400">Meta: {kpi.meta}</div>
+                        {((['Investimento', 'Frequência', 'CPM (Custo p/ Mil)'].includes(kpi.title)) ? (idx === 0 ? goals.amountSpent.value > 0 : idx === 3 ? goals.frequency.value > 0 : goals.cpm.value > 0) : true) && (
+                          <div className="mt-1.5 text-[10px] text-slate-400">
+                            {['Alcance', 'Impressões'].includes(kpi.title) ? "" : "Meta: "}{kpi.meta}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1966,7 +2069,11 @@ ${JSON.stringify(tabData, null, 2)}`
                           <span className="text-sm sm:text-base lg:text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">{kpi.val}</span>
                           {kpi.status && <StatusBadge status={kpi.status} />}
                         </div>
-                        <div className="mt-1.5 text-[10px] text-slate-400">Meta: {kpi.meta}</div>
+                        {((['CTR (Taxa Click Link)', 'Leads (Plataforma)', 'CPL (Custo p/ Lead)'].includes(kpi.title)) ? (idx === 2 ? goals.ctr.value > 0 : idx === 3 ? goals.leads.value > 0 : goals.cpl.value > 0) : true) && (
+                          <div className="mt-1.5 text-[10px] text-slate-400">
+                            {['Cliques', 'CPC (Custo p/ Click)'].includes(kpi.title) ? "" : "Meta: "}{kpi.meta}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2071,7 +2178,7 @@ ${JSON.stringify(tabData, null, 2)}`
                               </td>
                               <td className="py-4 px-4 text-center"><span className="text-sm font-semibold text-slate-900 dark:text-white">{FORMATTERS.number(item.leads)}</span></td>
                               <td className="py-4 px-4 text-center"><span className="text-xs font-medium text-slate-500">{FORMATTERS.currency(item.spend)}</span></td>
-                              <td className="py-4 px-4 text-center"><div className="flex flex-col items-center gap-1"><span className={`text-xs font-semibold ${item.cpl <= scaledGoals.cpl ? 'text-emerald-500' : 'text-slate-500'}`}>{FORMATTERS.currency(item.cpl)}</span><StatusBadge status={cplStatus} /></div></td>
+                              <td className="py-4 px-4 text-center"><div className="flex flex-col items-center gap-1"><span className={`text-xs font-semibold ${activeGoalId && item.cpl <= scaledGoals.cpl ? 'text-emerald-500' : 'text-slate-500'}`}>{FORMATTERS.currency(item.cpl)}</span><StatusBadge status={cplStatus} /></div></td>
                               <td className="py-4 px-4 text-center"><div className="flex flex-col items-center gap-1"><span className="text-xs font-medium text-slate-600 dark:text-slate-300">{FORMATTERS.percent(item.ctr)}</span><StatusBadge status={ctrStatus} /></div></td>
                               <td className="py-4 px-6 text-right">{isTopWinner ? (<div className="inline-flex items-center gap-1.5 bg-emerald-500 px-3 py-1.5 rounded-lg shadow-sm"><Trophy size={14} className="text-white" /><span className="text-[9px] font-bold text-white uppercase tracking-wider">Líder</span></div>) : index < 3 && item.leads > 0 ? (<div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg"><Star size={14} className="fill-blue-600" /><span className="text-[9px] font-bold uppercase">Top {index + 1}</span></div>) : (<span className="text-[10px] text-slate-400 font-medium">Standard</span>)}</td>
                             </tr>
@@ -2135,8 +2242,8 @@ ${JSON.stringify(tabData, null, 2)}`
                         {FORMATTERS.summarized(data.metrics.totalUnitsSold)}
                       </span>
                     }
-                    meta="PROGRESSO"
-                    metaValue={`Meta: ${FORMATTERS.number(scaledGoals.quantity)} un.`}
+                    meta={goals.quantity.value > 0 ? "PROGRESSO" : undefined}
+                    metaValue={goals.quantity.value > 0 ? `Meta: ${FORMATTERS.number(scaledGoals.quantity)} un.` : undefined}
                     icon={<ShoppingBag size={16} />}
                     statusTag={statusMap.quantity}
                     trend="up"
@@ -2174,8 +2281,8 @@ ${JSON.stringify(tabData, null, 2)}`
                         {scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%
                       </span>
                     }
-                    meta="PROGRESSO"
-                    metaValue={`Meta: ${FORMATTERS.number(scaledGoals.leads)} leads`}
+                    meta={goals.leads.value > 0 ? "PROGRESSO" : undefined}
+                    metaValue={goals.leads.value > 0 ? `Meta: ${FORMATTERS.number(scaledGoals.leads)} leads` : undefined}
                     icon={<Target size={16} />}
                     statusTag={statusMap.leads}
                   />
@@ -2205,8 +2312,8 @@ ${JSON.stringify(tabData, null, 2)}`
                             subValue: `Percentual de leads que receberam o primeiro contato. Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('mensagem inicial')}%`}
-                          meta="TAXA DE CONTATO"
-                          metaValue={`Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%`}
+                          meta={goals.mensagensEnviadas.value > 0 ? "TAXA DE CONTATO" : undefined}
+                          metaValue={goals.mensagensEnviadas.value > 0 ? `Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%` : undefined}
                           icon={<Mail size={16} />}
                           statusTag={statusMap.mensagensEnviadas}
                         />
@@ -2220,8 +2327,8 @@ ${JSON.stringify(tabData, null, 2)}`
                             subValue: `Percentual de leads em processo de qualificação. Meta: ${scaledGoals.atendimento.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('em atendimento')}%`}
-                          meta="EM ATENDIMENTO"
-                          metaValue={`Meta: ${scaledGoals.atendimento.toFixed(1)}%`}
+                          meta={goals.atendimento.value > 0 ? "EM ATENDIMENTO" : undefined}
+                          metaValue={goals.atendimento.value > 0 ? `Meta: ${scaledGoals.atendimento.toFixed(1)}%` : undefined}
                           icon={<Users size={16} />}
                           statusTag={statusMap.atendimento}
                         />
@@ -2235,8 +2342,8 @@ ${JSON.stringify(tabData, null, 2)}`
                             subValue: `Percentual de leads com agendamento confirmado. Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('reuniao agendada')}%`}
-                          meta="AGENDAMENTOS"
-                          metaValue={`Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%`}
+                          meta={goals.reuniaoMarcada.value > 0 ? "AGENDAMENTOS" : undefined}
+                          metaValue={goals.reuniaoMarcada.value > 0 ? `Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%` : undefined}
                           icon={<Calendar size={16} />}
                           statusTag={statusMap.reuniaoMarcada}
                         />
@@ -2250,8 +2357,8 @@ ${JSON.stringify(tabData, null, 2)}`
                             subValue: `Percentual de reuniões efetivamente concluídas. Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('reuniao realizada')}%`}
-                          meta="CONCLUÍDAS"
-                          metaValue={`Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%`}
+                          meta={goals.reuniaoRealizada.value > 0 ? "CONCLUÍDAS" : undefined}
+                          metaValue={goals.reuniaoRealizada.value > 0 ? `Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%` : undefined}
                           icon={<Check size={16} />}
                           statusTag={statusMap.reuniaoRealizada}
                         />
@@ -2265,8 +2372,8 @@ ${JSON.stringify(tabData, null, 2)}`
                             subValue: `Percentual de leads transformados em clientes. Meta: ${scaledGoals.vendas.toFixed(1)}%`
                           })}
                           value={`${getCumulativePercent('vendas concluidas')}%`}
-                          meta="CONVERSÃO FINAL"
-                          metaValue={`Meta: ${scaledGoals.vendas.toFixed(1)}%`}
+                          meta={goals.vendas.value > 0 ? "CONVERSÃO FINAL" : undefined}
+                          metaValue={goals.vendas.value > 0 ? `Meta: ${scaledGoals.vendas.toFixed(1)}%` : undefined}
                           icon={<Trophy size={16} />}
                           statusTag={statusMap.vendas}
                           trend="up"

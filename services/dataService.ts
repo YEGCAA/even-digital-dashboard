@@ -82,7 +82,8 @@ const PREFERRED_ORDER = [
 
 const generateColor = (name: string): string => {
   const n = normalizeStr(name);
-  if (n.includes("venda") || n.includes("concluid")) return '#10b981';
+  if (n.includes("venda") || n.includes("concluid") || n.includes("ganho")) return '#10b981';
+  if (n.includes("perdido")) return '#ef4444';
   const idx = PREFERRED_ORDER.findIndex(term => n.includes(normalizeStr(term)));
   if (idx === -1) return '#94a3b8';
   return `hsl(214, 66%, ${Math.max(25, 85 - (idx * (50 / PREFERRED_ORDER.length)))}%)`;
@@ -95,7 +96,7 @@ const toTitleCase = (str: string): string => {
   ).join(' ');
 };
 
-export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], rawDataByTable: Record<string, any[]> = {}, filterStartDate?: string, filterEndDate?: string): DashboardData => {
+export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], rawDataByTable: Record<string, any[]> = {}, filterStartDate?: string, filterEndDate?: string, filterPipelines: string[] = []): DashboardData => {
   let totalUnits = 0;
   let totalVGV = 0;
   let projectName = "Even Digital";
@@ -145,15 +146,47 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     if (rawDataByTable[t]) statusRows.push(...rawDataByTable[t]);
   });
 
-  // Create a map for quick status lookup by ID negocio
+  console.log(`[DATA SERVICE] Status tables found: ${statusTables.join(', ')}`);
+  console.log(`[DATA SERVICE] Total status rows: ${statusRows.length}`);
+
+  // Create a map for quick status lookup by ID negocio or Name
   const cleanStatusStr = (s: any) => String(s || '').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
 
-  const statusMap: Record<string, string> = {};
+  interface StatusInfo {
+    status: string;
+    pipeline: string;
+    value: number;
+    raw: any;
+    name: string;
+    date: string;
+    handled?: boolean;
+  }
+
+  const statusByIdMap: Record<string, StatusInfo> = {};
+  const statusByNameMap: Record<string, StatusInfo> = {};
+
   statusRows.forEach(row => {
     const idNegocioRaw = findValue(row, ["ID negocio", "id_negocio", "deal_id"]);
+    const nomeRaw = findValue(row, ["nome", "name", "customer name", "Etiqueta", "titulo do negocio"]);
     const statusVal = findValue(row, ["status", "venda_status", "status_venda"]);
-    if (idNegocioRaw && statusVal) {
-      statusMap[String(idNegocioRaw).trim()] = cleanStatusStr(statusVal);
+    const pipelineVal = findValue(row, ["Pipeline", "pipeline", "funil", "board"]);
+    const valorVal = findValue(row, ["valor", "vaor", "value", "venda"]);
+    const dateVal = findValue(row, ["data", "created_at", "date", "dia"]) || "";
+
+    const info: StatusInfo = {
+      status: cleanStatusStr(statusVal),
+      pipeline: String(pipelineVal || '').trim(),
+      value: parseNumeric(valorVal),
+      name: String(nomeRaw || '').trim(),
+      date: String(dateVal),
+      raw: row
+    };
+
+    if (idNegocioRaw) {
+      statusByIdMap[String(idNegocioRaw).trim()] = info;
+    }
+    if (nomeRaw) {
+      statusByNameMap[normalizeStr(String(nomeRaw))] = info;
     }
   });
 
@@ -220,11 +253,6 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     .sort((a, b) => b.p100 - a.p100 || b.views3s - a.views3s);
 
   salesRows.forEach((row, index) => {
-    // Log first row to see available fields
-    if (index === 0) {
-      console.log('Campos disponíveis na tabela de vendas:', Object.keys(row));
-    }
-
     const stageNameRaw = findValue(row, ["Nome Etapa", "Status", "etapa", "fase", "status_lead", "fase_funil"]);
     const stageIdRaw = findValue(row, ["ID Etapa", "Etapa ID", "status_id", "id_etapa", "stage_id", "id", "id etapa"]);
     const stageId = stageIdRaw ? String(stageIdRaw).trim() : "";
@@ -233,11 +261,14 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
     const idNegocioRaw = findValue(row, ["ID negocio", "id_negocio", "deal_id"]);
     const idNegocio = idNegocioRaw ? String(idNegocioRaw).trim() : "";
+    const leadNameRaw = findValue(row, ["nome", "name", "cliente", "customer name", "lead"]);
+    const leadNameNorm = normalizeStr(String(leadNameRaw || ''));
 
-    const statusFromMap = idNegocio ? statusMap[idNegocio] : null;
+    // Prioridade total para Status_Venda_2
+    const statusInfo = (idNegocio && statusByIdMap[idNegocio]) || (leadNameNorm && statusByNameMap[leadNameNorm]);
+    if (statusInfo) statusInfo.handled = true;
 
-    const statusVendaVal = statusFromMap || findValue(row, ["status_venda_2", "Status_Venda_2", "status_venda", "venda_status"]);
-    const statusVendaRaw = cleanStatusStr(statusVendaVal);
+    const statusVendaRaw = statusInfo ? statusInfo.status : cleanStatusStr(findValue(row, ["status_venda_2", "Status_Venda_2", "status_venda", "venda_status"]));
     const statusVendaNorm = normalizeStr(statusVendaRaw);
 
     // Extrair informações de pipeline
@@ -250,7 +281,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const rowQty = parseNumeric(findValue(row, ["quantidade", "qtd", "units_sold", "volume", "unid", "unidades"]));
     const multiplier = rowQty > 0 ? rowQty : 1;
 
-    const rowValRaw = findValue(row, ["valor", "vaor", "venda", "price", "amount", "valor_venda", "valor_venda_2"]);
+    const rowValRaw = (statusInfo && statusInfo.value > 0) ? statusInfo.value : findValue(row, ["valor", "vaor", "venda", "price", "amount", "valor_venda", "valor_venda_2"]);
     const rowVal = parseNumeric(rowValRaw);
 
     const isVendaConcluida = stageId === "14" ||
@@ -263,128 +294,41 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       stageNorm.includes("preagendamento") ||
       stageNorm.includes("pre-agendamento");
 
-    if (isVendaConcluida) {
-      totalSalesValue += (rowVal * multiplier);
-      countVendasID14 += multiplier; // Use multiplier for total units sold
+    const finalLeadName = String(leadName || findValue(row, ["email", "telefone"]) || "Lead Sem Nome").trim();
 
-      console.log(`[SALES] Lead: ${leadName} | ID: ${stageId} | Nome: ${stageName} | Qtd: ${multiplier}`);
-
-      stageCounts["Vendas Concluidas"] = (stageCounts["Vendas Concluidas"] || 0) + 1;
-    } else if (isPreAgendamento) {
-      stageCounts["Pre Agendamento"] = (stageCounts["Pre Agendamento"] || 0) + 1;
-    } else if (stageName) {
-      // Try to match with PREFERRED_ORDER
-      let matchedStage = PREFERRED_ORDER.find(term => stageNorm.includes(normalizeStr(term)));
-
-      // Alias matching
-      if (!matchedStage) {
-        if (stageNorm.includes("reuniaomarcada") || (stageNorm.includes("reuniao") && stageNorm.includes("marcad"))) {
-          matchedStage = "reuniao agendada";
-        } else if (stageNorm.includes("contato") || stageNorm.includes("mensagem") || stageNorm.includes("abordagem")) {
-          // Mais inclusivo para Mensagem Inicial
-          if (stageNorm.includes("inicial") || stageNorm.includes("primeira") || stageNorm.includes("mensagem")) {
-            matchedStage = "mensagem inicial";
-          } else {
-            matchedStage = "tentativa de contato";
-          }
-        } else if (stageNorm.includes("novo") || stageNorm.includes("leads") || stageNorm.includes("entrada") || stageNorm.includes("recebid")) {
-          matchedStage = "entrada do lead";
-        }
-      }
-
-      if (matchedStage) {
-        const officialName = toTitleCase(matchedStage);
-        if (officialName !== "Vendas Concluidas") {
-          stageCounts[officialName] = (stageCounts[officialName] || 0) + 1;
-        }
-      } else {
-        // If no match found, try reverse matching (check if any term is contained in the stage name)
-        let foundMatch = false;
-        for (const term of PREFERRED_ORDER) {
-          const termNorm = normalizeStr(term);
-          if (stageNorm.includes(termNorm)) {
-            const officialName = toTitleCase(term);
-            stageCounts[officialName] = (stageCounts[officialName] || 0) + 1;
-            foundMatch = true;
-            break;
-          }
-        }
-
-        // If still no match, count it anyway under the first stage (entrada do lead)
-        if (!foundMatch && stageName) {
-          stageCounts["Entrada Do Lead"] = (stageCounts["Entrada Do Lead"] || 0) + 1;
-        }
+    // Get tags if available
+    let tags: string[] | undefined;
+    const tagsRaw = findValue(row, ["tags", "etiquetas", "labels", "categorias", "tag", "etiqueta", "label", "categoria", "tipo", "type", "classificacao", "classification"]);
+    if (tagsRaw) {
+      if (Array.isArray(tagsRaw)) {
+        tags = tagsRaw.map(t => String(t).trim()).filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
+      } else if (typeof tagsRaw === 'string') {
+        tags = tagsRaw.split(/[,;|]/).map(t => t.trim()).filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
       }
     }
+    if (tags && tags.length === 0) tags = undefined;
 
+    // LÓGICA RÍGIDA PEDIDA: "Reserva do Sal so vai ser pra quem ta escrito Reserva do Sal e o ID da Pipeline 3"
+    // PREVALECE STATUS_VENDA_2: Se vier do statusMap, o pipeline da Status_Venda_2 prevalece (conforme pedido)
+    const pipelineNorm = normalizeStr(pipelineName);
+    const hasReservaName = pipelineNorm.includes("reserva");
+    const hasReservaId = String(pipelineId).trim() === "3";
 
-    if (true) { // Incluir leads mesmo sem nome
-      const finalLeadName = String(leadName || findValue(row, ["email", "telefone"]) || "Lead Sem Nome").trim();
-
-      // Get tags if available - try multiple possible field names
-      let tags: string[] | undefined;
-
-      const tagsRaw = findValue(row, [
-        "tags",
-        "etiquetas",
-        "labels",
-        "categorias",
-        "tag",
-        "etiqueta",
-        "label",
-        "categoria",
-        "tipo",
-        "type",
-        "classificacao",
-        "classification"
-      ]);
-
-
-      if (tagsRaw) {
-        console.log('Tags encontradas para', leadName, ':', tagsRaw);
-        // Handle different tag formats
-        if (Array.isArray(tagsRaw)) {
-          tags = tagsRaw
-            .map(t => String(t).trim())
-            .filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
-        } else if (typeof tagsRaw === 'string') {
-          // Split by comma, semicolon, or pipe
-          tags = tagsRaw
-            .split(/[,;|]/)
-            .map(t => t.trim())
-            .filter(t => t.length > 0 && t.toLowerCase() !== 'sem etiqueta');
-        }
-      }
-
-      // Only set tags if there are valid tags after filtering
-      if (tags && tags.length === 0) {
-        tags = undefined;
-      }
-
-      console.log('Tags processadas:', tags);
-
-      // LÓGICA RÍGIDA PEDIDA: "Reserva do Sal so vai ser pra quem ta escrito Reserva do Sal e o ID da Pipeline 3"
-      const pipelineNorm = normalizeStr(pipelineName);
-      const hasReservaName = pipelineNorm.includes("reserva");
-      const hasReservaId = String(pipelineId).trim() === "3";
-
-      // Se tem status de venda ou vem de valores_2, vai pro High Contorno. 
-      // Caso contrário, se for ID 3 + Nome, vai pra Reserva.
+    let finalPipeline = "High Contorno";
+    if (statusInfo && statusInfo.pipeline) {
+      const sPipeNorm = normalizeStr(statusInfo.pipeline);
+      if (sPipeNorm.includes("reserva")) finalPipeline = "Reserva do Sal";
+      else finalPipeline = "High Contorno";
+    } else {
       const isReservaSal = hasReservaName && hasReservaId && !statusVendaRaw;
+      finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
+    }
 
-      const finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
+    // Determinar estágio final
+    const finalStage = isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa"));
 
-      // Determinar estágio final
-      const finalStage = isVendaConcluida ? "Vendas Concluidas" : (isPreAgendamento ? "Pre Agendamento" : (stageName || "Sem Etapa"));
-
-      // Debug log específico para Marcelo ou qualquer Reserva
-      if (finalLeadName.includes("Marcelo Santana") || (isReservaSal && index < 20)) {
-        console.log(`[PIPELINE_DEBUG] ${finalLeadName} | Pipeline: "${pipelineName}" | ID_Pipe: "${pipelineId}" | Status: "${statusVendaRaw}" | Final: ${finalPipeline} | Estágio: ${finalStage}`);
-      }
-      if (!isReservaSal && index < 3) {
-        console.log(`[HIGH] ${finalLeadName} | Final: ${finalPipeline}`);
-      }
-
+    // Pipeline Filter Check
+    if (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline))) {
       leadsList.push({
         id: `lead-${index}-${Math.random().toString(36).substr(2, 9)}`,
         name: finalLeadName,
@@ -403,6 +347,71 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     }
   });
 
+
+  // PROCESSAR TODOS OS LEADS DE STATUS_VENDA_2 COM STATUS "GANHO" OU "PERDIDO"
+  // Adicionar diretamente em Vendas Concluidas ou Perdido para visualização no dashboard
+  statusRows.forEach((sRow, sIdx) => {
+    const statusRaw = findValue(sRow, ["status", "venda_status", "status_venda"]);
+    const statusCleaned = cleanStatusStr(statusRaw);
+    const statusNorm = normalizeStr(statusCleaned);
+
+    // Só processar se for GANHO ou PERDIDO
+    const isGanho = statusNorm.includes("ganho");
+    const isPerdido = statusNorm.includes("perdido");
+
+    if (!isGanho && !isPerdido) return;
+
+    const nome = findValue(sRow, ["nome", "name", "customer name", "Etiqueta", "titulo do negocio"]) || "Lead Sem Nome";
+    const pipelineRaw = findValue(sRow, ["Pipeline", "pipeline", "funil", "board"]) || "";
+    const pipelineNorm = normalizeStr(String(pipelineRaw));
+
+    // Determinar estágio final: Se for GANHO vai pra Vendas Concluidas. Se for PERDIDO, busca etapa finalizada.
+    let finalStage = "Vendas Concluidas";
+    let finalStageId = "14";
+
+    if (isPerdido) {
+      const etapaFinalizada = findValue(sRow, ["Etapa finalizada", "etapa_finalizada", "Etapa", "etapa", "fase"]);
+      finalStage = etapaFinalizada ? toTitleCase(String(etapaFinalizada)) : "Entrada Do Lead";
+      finalStageId = "lost";
+    }
+
+    // Determinar pipeline: Reserva do Sal ou High Contorno
+    const finalPipeline = pipelineNorm.includes("reserva") ? "Reserva do Sal" : "High Contorno";
+
+    // Verificar filtro de pipeline (se houver filtro selecionado no topo)
+    if (filterPipelines.length > 0 && !filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline))) {
+      return;
+    }
+
+    const valor = parseNumeric(findValue(sRow, ["valor", "vaor", "value", "venda"]));
+    const email = String(findValue(sRow, ["email", "e-mail"]) || "---");
+    const telefone = String(findValue(sRow, ["telefone", "whatsapp", "phone"]) || "---");
+    const tituloNegocio = String(findValue(sRow, ["titulo do negocio", "negocio", "deal title"]) || "---");
+    const data = String(findValue(sRow, ["data", "created_at", "date", "dia"]) || "---");
+
+    // Adicionar à lista de leads no estágio correspondente
+    leadsList.push({
+      id: `status-venda-${isGanho ? 'ganho' : 'perdido'}-${sIdx}-${Math.random().toString(36).substr(2, 9)}`,
+      name: String(nome).trim(),
+      email: email,
+      phone: telefone,
+      businessTitle: tituloNegocio,
+      pipeline: finalPipeline,
+      stage: finalStage,
+      stageId: finalStageId,
+      quantity: 1,
+      date: data,
+      statusVenda2: statusCleaned,
+      value: valor
+    });
+
+    // Atualizar totais de faturamento e contagem de vendas (SÓ PARA GANHO)
+    if (isGanho && valor > 0) {
+      totalSalesValue += valor;
+      countVendasID14 += 1;
+    }
+  });
+
   // Processar tabela de valores extras (Novos Ganhos)
   const valoresTables = fetchedTables.filter(t => t.toLowerCase().includes('valores'));
   const valoresRows: any[] = [];
@@ -411,36 +420,52 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   });
 
   const getDeterministicDate2025 = (name: string, index: number) => {
-    // Usar o nome e o index para criar uma semente simples
     const seed = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + index;
     const start = new Date('2025-02-01T00:00:00').getTime();
     const end = new Date('2025-11-30T23:59:59').getTime();
     const range = end - start;
-    // Pseudo-random baseado na semente
     const pseudoRandom = (Math.sin(seed) + 1) / 2;
     return new Date(start + pseudoRandom * range).toISOString();
   };
 
-  // --- ISOLAMENTO DE VENDAS CONCLUÍDAS (VALORES_ID) ---
-  // Resetamos o que veio do CRM para garantir que 'Vendas Concluidas' venha APENAS da tabela valores
+  // Reset aggregates for Vendas Concluidas (to be populated from CRM/Valores)
   totalSalesValue = 0;
   countVendasID14 = 0;
   stageCounts["Vendas Concluidas"] = 0;
-  // Removemos qualquer lead de HIGH CONTORNO que o CRM tenha marcado como venda concluída (ID 14) 
-  // para serem substituídos pela tabela valores. Leads de RESERVA DO SAL são mantidos.
-  leadsList = leadsList.filter(l => {
+
+  // Re-build leadsList to include ONLY necessary concluida leads (Reserva) vs Valores (High Contorno)
+  const crmLeads = leadsList.filter(l => {
     const isConcluida = l.stage === "Vendas Concluidas" || l.stageId === "14";
-    if (isConcluida && l.pipeline === "High Contorno") return false;
+    // Se for Venda Concluída no High Contorno, removemos pois será re-adicionado via valoresRows (Novos Ganhos)
+    // EXCETO para leads da Status_Venda_2 que devem ser mantidos se forem órfãos.
+    if (isConcluida && l.pipeline === "High Contorno" && !l.id.startsWith('status-orphan')) return false;
     return true;
   });
 
+  leadsList = crmLeads;
+
+  // Add Concluidas from CRM (Reserva) to aggregates
+  leadsList.forEach(l => {
+    const isConcluida = l.stage === "Vendas Concluidas" || l.stageId === "14";
+    if (isConcluida) {
+      totalSalesValue += (l.value || 0);
+      countVendasID14 += l.quantity;
+    }
+  });
 
   valoresRows.forEach((row, vIndex) => {
     const vNomeRaw = findValue(row, ["nome", "cliente"]);
     const vNome = vNomeRaw ? String(vNomeRaw) : "Sem Nome";
-    const vValor = parseNumeric(findValue(row, ["valor"]));
+    const vNomeNorm = normalizeStr(vNome);
 
-    if (vValor > 0) {
+    // Check Status_Venda_2 prevalence for extra values too
+    const statusInfo = statusByNameMap[vNomeNorm];
+    if (statusInfo) statusInfo.handled = true;
+
+    const vValor = (statusInfo && statusInfo.value > 0) ? statusInfo.value : parseNumeric(findValue(row, ["valor"]));
+    const isPerdido = statusInfo && normalizeStr(statusInfo.status).includes("perdido");
+
+    if (vValor > 0 && !isPerdido) {
       const syncDate = getDeterministicDate2025(vNome, vIndex);
       const dateObj = new Date(syncDate);
 
@@ -449,34 +474,69 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       if (filterEndDate && dateObj > new Date(filterEndDate)) isWithinFilter = false;
 
       if (isWithinFilter) {
-        totalSalesValue += vValor;
-        countVendasID14 += 1;
-        stageCounts["Vendas Concluidas"] = (stageCounts["Vendas Concluidas"] || 0) + 1;
+        let vPipeline = "High Contorno";
+        if (statusInfo && statusInfo.pipeline) {
+          const sPipeNorm = normalizeStr(statusInfo.pipeline);
+          if (sPipeNorm.includes("reserva")) vPipeline = "Reserva do Sal";
+        }
 
-        leadsList.push({
-          id: `valor-${vIndex}-${Math.random().toString(36).substr(2, 9)}`,
-          name: vNome,
-          email: "---",
-          phone: "---",
-          businessTitle: vNome,
-          pipeline: "High Contorno", // Leads da tabela valores são High Contorno
-          stage: "Vendas Concluidas",
-          stageId: "14",
-          quantity: 1,
-          date: syncDate,
-          statusVenda2: "ganho", // Sem status_venda_2 para ser Reserva do Sal (Wait, user said High Contorno for status_venda_2 too)
-          value: vValor
-        });
+        if (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(vPipeline))) {
+          totalSalesValue += vValor;
+          countVendasID14 += 1;
+          leadsList.push({
+            id: `valor-${vIndex}-${Math.random().toString(36).substr(2, 9)}`,
+            name: vNome,
+            email: "---",
+            phone: "---",
+            businessTitle: vNome,
+            pipeline: vPipeline,
+            stage: "Vendas Concluidas",
+            stageId: "14",
+            quantity: 1,
+            date: syncDate,
+            statusVenda2: statusInfo ? statusInfo.status : "ganho",
+            value: vValor
+          });
+        }
       }
     }
   });
 
-  // O total de Leads Geral (Overview) vem do CRM
-  const realTotalLeads = leadsList.length;
+  // Recalculate stageCounts
+  leadsList.forEach(l => {
+    const stageNorm = normalizeStr(l.stage);
+    let matchedStage: string | undefined;
 
-  // No Marketing, o CPL e outras métricas devem usar estritamente os leads reportados pela tabela de marketing (ex: marketing_2)
-  // Isso garante que filtros de campanha mostrem apenas os leads daquela campanha.
-  // Só usamos realTotalLeads (CRM) como fallback se não houver dados nenhuns de marketing carregados.
+    if (l.stage === "Vendas Concluidas") {
+      matchedStage = "vendas concluidas";
+    } else if (l.stage === "Pre Agendamento") {
+      matchedStage = "pre agendamento";
+    } else {
+      matchedStage = PREFERRED_ORDER.find(term => stageNorm.includes(normalizeStr(term)));
+      if (!matchedStage) {
+        if (stageNorm.includes("reuniaomarcada") || (stageNorm.includes("reuniao") && stageNorm.includes("marcad"))) {
+          matchedStage = "reuniao agendada";
+        } else if (stageNorm.includes("contato") || stageNorm.includes("mensagem") || stageNorm.includes("abordagem")) {
+          if (stageNorm.includes("inicial") || stageNorm.includes("primeira") || stageNorm.includes("mensagem")) {
+            matchedStage = "mensagem inicial";
+          } else {
+            matchedStage = "tentativa de contato";
+          }
+        } else if (stageNorm.includes("novo") || stageNorm.includes("leads") || stageNorm.includes("entrada") || stageNorm.includes("recebid")) {
+          matchedStage = "entrada do lead";
+        }
+      }
+    }
+
+    if (matchedStage) {
+      const officialName = toTitleCase(matchedStage);
+      stageCounts[officialName] = (stageCounts[officialName] || 0) + 1;
+    } else if (l.stage && l.stage !== "Sem Etapa") {
+      stageCounts["Entrada Do Lead"] = (stageCounts["Entrada Do Lead"] || 0) + 1;
+    }
+  });
+
+  const realTotalLeads = leadsList.length;
   const hasMarketingData = marketingRows.length > 0;
   const leadsForMarketingCalculations = hasMarketingData ? totalMarketingLeads : realTotalLeads;
 
@@ -489,16 +549,12 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   const funnelStages: FunnelStage[] = PREFERRED_ORDER.map(term => {
     const officialName = toTitleCase(term);
     const count = stageCounts[officialName] || 0;
-
-    // Calculate value for this stage
     const stageLeads = leadsList.filter(lead => {
       const leadStageNorm = normalizeStr(lead.stage);
       const termNorm = normalizeStr(term);
       return leadStageNorm.includes(termNorm) || normalizeStr(officialName).includes(leadStageNorm);
     });
-
     const stageValue = stageLeads.reduce((sum, lead) => sum + (lead.value || 0), 0);
-
     return {
       stage: officialName,
       count: count,
@@ -515,7 +571,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       preLaunchSoldRatio: 0,
       conversionRateLeadToSale: 0,
       qualifiedLeadRatio: 0,
-      cac: averageCPL, // CAC/CPL Base
+      cac: averageCPL,
       totalUnitsSold: countVendasID14,
       totalLeads: realTotalLeads,
       totalSpend: totalSpend,
@@ -528,7 +584,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         reach: totalReach,
         impressions: totalImpressions,
         clicks: totalClicks,
-        leads: leadsForMarketingCalculations, // Added leads
+        leads: leadsForMarketingCalculations,
         landingPageConvRate: 0
       },
       salesMetrics: { avgResponseTime: 'N/A', totalBilling: 0, generalConvRate: 0 }
