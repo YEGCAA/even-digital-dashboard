@@ -1,4 +1,4 @@
-
+﻿
 import {
   Moon, Sun,
   BarChart3, Database,
@@ -1803,7 +1803,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Total de Leads"
-                    value={FORMATTERS.number(data.metrics.marketingMetrics.leads)}
+                    value={FORMATTERS.number(data.metrics.totalLeads)}
                     meta={goals.leads.value > 0 ? (goals.leads.mode === 'fixed' ? "META FIXA" : "META MENSAL") : undefined}
                     metaValue={goals.leads.value > 0 ? FORMATTERS.number(scaledGoals.leads) : undefined}
                     icon={<RefreshCw size={16} />}

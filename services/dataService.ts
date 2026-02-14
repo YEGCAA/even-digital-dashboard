@@ -1,4 +1,4 @@
-
+﻿
 import { DashboardData, FunnelStage, ClientLead, CreativePlayback } from '../types';
 import { supabase } from './supabase';
 
@@ -206,20 +206,46 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   }
 
   marketingRows.forEach((row) => {
-    const spend = parseNumeric(findValue(row, ["Amount Spent", "investimento", "valor gasto", "custo", "gastos", "spent"]));
-    totalSpend += spend;
+    // Check if row is within date filter
+    let isWithinDateFilter = true;
+    if (filterStartDate || filterEndDate) {
+      const rowDateRaw = row.Date || row.Day || row.dia || row.data || row.created_at;
+      if (rowDateRaw) {
+        let dateStr = String(rowDateRaw);
+        if (dateStr.includes('/') && dateStr.split('/').length === 3) {
+          const [day, month, year] = dateStr.split('/');
+          dateStr = `${year}-${month}-${day}`;
+        }
+        const rowDate = new Date(dateStr);
+        if (!isNaN(rowDate.getTime())) {
+          if (filterStartDate) {
+            const start = new Date(filterStartDate + "T00:00:00");
+            if (rowDate < start) isWithinDateFilter = false;
+          }
+          if (filterEndDate) {
+            const end = new Date(filterEndDate + "T23:59:59");
+            if (rowDate > end) isWithinDateFilter = false;
+          }
+        }
+      }
+    }
 
-    const leads = parseNumeric(findValue(row, ["Leads", "lead count", "leads_gerados", "results", "resultados", "leads fb", "leads google"]));
-    totalMarketingLeads += leads;
+    if (isWithinDateFilter) {
+      const spend = parseNumeric(findValue(row, ["Amount Spent", "investimento", "valor gasto", "custo", "gastos", "spent"]));
+      totalSpend += spend;
 
-    totalReach += parseNumeric(findValue(row, ["Reach", "Alcance"]));
-    totalImpressions += parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
-    totalClicks += parseNumeric(findValue(row, ["Link Clicks", "Cliques", "Clicks"]));
+      const leads = parseNumeric(findValue(row, ["Leads", "lead count", "leads_gerados", "results", "resultados", "leads fb", "leads google"]));
+      totalMarketingLeads += leads;
 
-    const freq = parseNumeric(findValue(row, ["Frequency", "Frequencia", "frequency_score"]));
-    if (freq > 0) {
-      sumFreq += freq;
-      countFreqRows++;
+      totalReach += parseNumeric(findValue(row, ["Reach", "Alcance"]));
+      totalImpressions += parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
+      totalClicks += parseNumeric(findValue(row, ["Link Clicks", "Cliques", "Clicks"]));
+
+      const freq = parseNumeric(findValue(row, ["Frequency", "Frequencia", "frequency_score"]));
+      if (freq > 0) {
+        sumFreq += freq;
+        countFreqRows++;
+      }
     }
 
     const adName = findValue(row, ["Ad Name", "Nome do Anuncio", "Anuncio", "ad_name", "Anúncio"]) || "Sem Nome";
@@ -540,6 +566,11 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   const hasMarketingData = marketingRows.length > 0;
   const leadsForMarketingCalculations = hasMarketingData ? totalMarketingLeads : realTotalLeads;
 
+  console.log('[DEBUG LEADS] Marketing rows:', marketingRows.length);
+  console.log('[DEBUG LEADS] Total marketing leads:', totalMarketingLeads);
+  console.log('[DEBUG LEADS] Real total leads (CRM):', realTotalLeads);
+  console.log('[DEBUG LEADS] Final leads for calculations:', leadsForMarketingCalculations);
+
   const averageCPL = leadsForMarketingCalculations > 0 ? totalSpend / leadsForMarketingCalculations : 0;
   const averageCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;
   const averageCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
@@ -647,3 +678,4 @@ export const fetchData = async (tableNames: string[]): Promise<{ data: Dashboard
     return { data: processSupabaseData([], [], {}), error: `Falha na conexão: ${err.message}` };
   }
 };
+
