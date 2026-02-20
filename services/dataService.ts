@@ -133,7 +133,9 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
   const salesRows: any[] = [];
   salesTables.forEach(t => {
-    if (rawDataByTable[t]) salesRows.push(...rawDataByTable[t]);
+    if (rawDataByTable[t]) {
+      rawDataByTable[t].forEach(r => salesRows.push({ ...r, __tableName: t }));
+    }
   });
 
   const dadosRows: any[] = [];
@@ -294,7 +296,50 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const statusInfo = (idNegocio && statusByIdMap[idNegocio]) || (leadNameNorm && statusByNameMap[leadNameNorm]);
     if (statusInfo) statusInfo.handled = true;
 
-    const statusVendaRaw = statusInfo ? statusInfo.status : cleanStatusStr(findValue(row, ["status_venda_2", "Status_Venda_2", "status_venda", "venda_status"]));
+    const statusVendaRaw = (() => {
+      // Lógica específica para Vendas_2 ou qualquer tabela que tenha a coluna 'atualizado'
+      const atualizadoRaw = findValue(row, ["atualizado", "Atualizado"]);
+      const isVendas2 = String(row.__tableName || '').toLowerCase().includes('vendas_2');
+
+      if (isVendas2 || (atualizadoRaw !== null && atualizadoRaw !== undefined)) {
+        const aStr = (atualizadoRaw === null || atualizadoRaw === undefined) ? "" : String(atualizadoRaw).trim();
+        const aNorm = normalizeStr(aStr);
+
+        // 1. Se estiver vazio, é perdido
+        if (aStr === "") return "perdido";
+
+        // 2. Se for "Vendido", é ganho
+        if (aNorm.includes("vendido")) return "ganho";
+
+        // 3. Se for data, comparar componentes (Ano, Mês, Dia) para garantir o "Relógio de Brasília" (Local)
+        let dStr = aStr;
+        if (dStr.includes('/') && dStr.split('/').length === 3) {
+          const [d, m, y] = dStr.split('/');
+          dStr = `${y}-${m}-${d}`;
+        }
+
+        const dateParts = dStr.split('-');
+        if (dateParts.length === 3) {
+          const [y, m, d] = dateParts.map(Number);
+          const dObj = new Date(y, m - 1, d);
+          const today = new Date();
+
+          const isToday = dObj.getFullYear() === today.getFullYear() &&
+            dObj.getMonth() === today.getMonth() &&
+            dObj.getDate() === today.getDate();
+
+          if (isToday) {
+            return "atual"; // Considerado um card atual
+          }
+        }
+
+        // 4. Se não for de hoje nem "Vendido" -> perdido
+        return "perdido";
+      }
+
+      return statusInfo ? statusInfo.status : cleanStatusStr(findValue(row, ["status_venda_2", "Status_Venda_2", "status_venda", "venda_status"]));
+    })();
+
     const statusVendaNorm = normalizeStr(statusVendaRaw);
 
     // Extrair informações de pipeline
@@ -314,7 +359,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       stageNorm.includes("vendasconcluidas") ||
       stageNorm.includes("vendasconcluida") ||
       stageNorm === "venda concluida" ||
-      statusVendaNorm.includes("ganho");
+      statusVendaNorm.includes("ganho") ||
+      normalizeStr(String(findValue(row, ["atualizado", "Atualizado"]) || "")).includes("vendido");
 
     const isPreAgendamento = stageId === "10" ||
       stageNorm.includes("preagendamento") ||
@@ -346,7 +392,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       if (sPipeNorm.includes("reserva")) finalPipeline = "Reserva do Sal";
       else finalPipeline = "High Contorno";
     } else {
-      const isReservaSal = hasReservaName && hasReservaId && !statusVendaRaw;
+      const isReservaSal = hasReservaName && hasReservaId;
       finalPipeline = isReservaSal ? "Reserva do Sal" : "High Contorno";
     }
 
@@ -363,7 +409,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         businessTitle: String(findValue(row, ["titulo do negocio", "negocio", "deal title", "business"]) || "---"),
         pipeline: finalPipeline,
         stage: finalStage,
-        stageId: stageId,
+        stageId: statusVendaNorm.includes('perdido') ? "lost" : stageId,
         quantity: multiplier,
         date: String(findValue(row, ["data", "created_at", "date", "dia"]) || "---"),
         tags: tags,

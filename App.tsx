@@ -878,68 +878,7 @@ const App: React.FC = () => {
     }
   };
 
-  const statusMap = useMemo(() => {
-    if (!data) return {};
-    return {
-      amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better', goals.amountSpent.mode),
-      leads: calculateStatus(data.metrics.marketingMetrics.leads, scaledGoals.leads, 'higher-better', goals.leads.mode),
-      cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
-      ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
-      cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
-      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
-      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
-      mensagensEnviadas: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
-        const stage = data.funnelData?.find(s => {
-          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
-          const tNorm = 'mensageminicial'.toLowerCase();
-          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
-        });
-        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.mensagensEnviadas, 'higher-better', goals.mensagensEnviadas.mode);
-      })(),
-      atendimento: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
-        const stage = data.funnelData?.find(s => {
-          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
-          const tNorm = 'ematendimento'.toLowerCase();
-          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
-        });
-        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.atendimento, 'higher-better', goals.atendimento.mode);
-      })(),
-      reuniaoMarcada: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
-        const stage = data.funnelData?.find(s => {
-          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
-          const tNorm = 'reuniaoagendada'.toLowerCase();
-          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
-        });
-        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.reuniaoMarcada, 'higher-better', goals.reuniaoMarcada.mode);
-      })(),
-      reuniaoRealizada: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
-        const stage = data.funnelData?.find(s => {
-          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
-          const tNorm = 'reuniaorealizada'.toLowerCase();
-          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
-        });
-        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.reuniaoRealizada, 'higher-better', goals.reuniaoRealizada.mode);
-      })(),
-      vendas: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
-        const stage = data.funnelData?.find(s => {
-          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
-          const tNorm = 'vendasconcluidas'.toLowerCase();
-          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
-        });
-        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
-        return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better', goals.vendas.mode);
-      })()
-    };
-  }, [data, scaledGoals]);
+
 
   const adRankingData = useMemo(() => {
     if (!data?.rawDataByTable) return [];
@@ -1099,6 +1038,69 @@ const App: React.FC = () => {
       };
     });
   }, [data]);
+
+  const statusMap = useMemo(() => {
+    if (!data || !correctedFunnelData) return {};
+    return {
+      amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better', goals.amountSpent.mode),
+      leads: calculateStatus(data.metrics.marketingMetrics.leads, scaledGoals.leads, 'higher-better', goals.leads.mode),
+      cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
+      ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
+      cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
+      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
+      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
+      mensagensEnviadas: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'mensageminicial'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.mensagensEnviadas, 'higher-better', goals.mensagensEnviadas.mode);
+      })(),
+      atendimento: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'ematendimento'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.atendimento, 'higher-better', goals.atendimento.mode);
+      })(),
+      reuniaoMarcada: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'reuniaoagendada'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.reuniaoMarcada, 'higher-better', goals.reuniaoMarcada.mode);
+      })(),
+      reuniaoRealizada: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'reuniaorealizada'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.reuniaoRealizada, 'higher-better', goals.reuniaoRealizada.mode);
+      })(),
+      vendas: (() => {
+        const totalLeadsCount = data.leadsList.length || 1;
+        const stage = correctedFunnelData.find(s => {
+          const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+          const tNorm = 'vendasconcluidas'.toLowerCase();
+          return sNorm.includes(tNorm) || tNorm.includes(sNorm);
+        });
+        const actualPercent = stage ? ((stage.count / totalLeadsCount) * 100) : 0;
+        return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better', goals.vendas.mode);
+      })()
+    };
+  }, [data, scaledGoals, correctedFunnelData]);
 
   // Filtered funnel for Overview page - show only specific stages
   const filteredFunnelForOverview = useMemo(() => {
