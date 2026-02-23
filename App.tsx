@@ -263,7 +263,7 @@ const App: React.FC = () => {
   const [salesSearch, setSalesSearch] = useState('');
   const [selectedStage, setSelectedStage] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedVendaStatus, setSelectedVendaStatus] = useState<'Todos' | 'Atual' | 'Ganho' | 'Perdido'>('Todos');
+  const [selectedVendaStatus, setSelectedVendaStatus] = useState<'Todos' | 'Atual' | 'Ganho' | 'Perdido'>('Atual');
   const [selectedPipelines, setSelectedPipelines] = useState<string[]>([]); // Novo filtro de Pipeline
   const [isSalesPipelineDropdownOpen, setIsSalesPipelineDropdownOpen] = useState(false);
   const pipelineRef = useRef<HTMLDivElement>(null);
@@ -1004,8 +1004,13 @@ const App: React.FC = () => {
         cumulativeCount = leadsWithIndex.reduce((sum, lead) => sum + (lead.quantity || 1), 0);
       } else {
         // All other stages: count leads in this stage OR any subsequent stage (summing quantities)
+        // BUT exclude lost leads from cumulative counts of active stages
         cumulativeCount = leadsWithIndex
-          .filter(lead => lead.stageIndex >= stageIndex && lead.stageIndex !== -1)
+          .filter(lead => {
+            const isAtOrAfter = lead.stageIndex >= stageIndex && lead.stageIndex !== -1;
+            const isLost = normalizeStr(String(lead.statusVenda2 || '')).includes('perdido');
+            return isAtOrAfter && !isLost;
+          })
           .reduce((sum, lead) => sum + (lead.quantity || 1), 0);
       }
 
@@ -2543,7 +2548,7 @@ ${JSON.stringify(tabData, null, 2)}`
                           // Apply venda status filter
                           let matchesVendaStatus = true;
                           if (selectedVendaStatus === 'Atual') {
-                            matchesVendaStatus = isActive;
+                            matchesVendaStatus = isActive || isWon; // Inclui ganhos para que a coluna de vendas não fique vazia
                           } else if (selectedVendaStatus === 'Ganho') {
                             matchesVendaStatus = isWon;
                           } else if (selectedVendaStatus === 'Perdido') {
