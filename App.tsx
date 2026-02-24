@@ -946,6 +946,23 @@ const App: React.FC = () => {
     });
   }, [data, selectedVendaStatus, selectedTags]);
 
+  const salesMetricsForAnalysis = useMemo(() => {
+    if (!leadsForAnalysis) return { totalRevenue: 0, totalUnitsSold: 0, totalLeads: 0 };
+
+    const totalLeads = leadsForAnalysis.reduce((sum, l) => sum + (l.quantity || 1), 0);
+
+    const ganhoLeads = leadsForAnalysis.filter(l => {
+      const sVendaNorm = normalizeText(l.statusVenda2);
+      const stageNormLocal = normalizeText(l.stage);
+      return sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || l.stage === 'Vendas Concluidas';
+    });
+
+    const totalRevenue = ganhoLeads.reduce((sum, l) => sum + (l.value || 0), 0);
+    const totalUnitsSold = ganhoLeads.reduce((sum, l) => sum + (l.quantity || 1), 0);
+
+    return { totalRevenue, totalUnitsSold, totalLeads };
+  }, [leadsForAnalysis]);
+
   // Recalculate funnel data with CUMULATIVE counts (leads in advanced stages count in all previous)
   const correctedFunnelData = useMemo(() => {
     if (!data?.funnelData || !leadsForAnalysis) return data?.funnelData || [];
@@ -1070,12 +1087,12 @@ const App: React.FC = () => {
     if (!data || !correctedFunnelData) return {};
     return {
       amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better', goals.amountSpent.mode),
-      leads: calculateStatus(data.metrics.marketingMetrics.leads, scaledGoals.leads, 'higher-better', goals.leads.mode),
+      leads: calculateStatus(salesMetricsForAnalysis.totalLeads, scaledGoals.leads, 'higher-better', goals.leads.mode),
       cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
       ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
       cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
       frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
-      quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
+      quantity: calculateStatus(salesMetricsForAnalysis.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
       mensagensEnviadas: (() => {
         const totalLeadsCount = leadsForAnalysis.length || 1;
         const stage = correctedFunnelData.find(s => {
@@ -1127,7 +1144,7 @@ const App: React.FC = () => {
         return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better', goals.vendas.mode);
       })()
     };
-  }, [data, scaledGoals, correctedFunnelData, leadsForAnalysis]);
+  }, [data, scaledGoals, correctedFunnelData, leadsForAnalysis, salesMetricsForAnalysis]);
 
   // Filtered funnel for Overview page - show only specific stages
   const filteredFunnelForOverview = useMemo(() => {
@@ -1805,7 +1822,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Vendas Concluídas"
-                    value={FORMATTERS.summarizedCurrency(data.metrics.totalRevenue)}
+                    value={FORMATTERS.summarizedCurrency(salesMetricsForAnalysis.totalRevenue)}
                     meta="STATUS ATUAL"
                     metaValue="VGV Realizado"
                     icon={<ShoppingBag size={16} />}
@@ -1813,7 +1830,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Vendas / VGV"
-                    value={FORMATTERS.percent((data.metrics.totalRevenue / (data.clientInfo.vgv || 1)) * 100)}
+                    value={FORMATTERS.percent((salesMetricsForAnalysis.totalRevenue / (data.clientInfo.vgv || 1)) * 100)}
                     meta="TAXA DE SUCESSO"
                     metaValue="Performance"
                     icon={<Percent size={16} />}
@@ -1832,7 +1849,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Total de Leads"
-                    value={FORMATTERS.number(data.metrics.totalLeads)}
+                    value={FORMATTERS.number(salesMetricsForAnalysis.totalLeads)}
                     meta={goals.leads.value > 0 ? (goals.leads.mode === 'fixed' ? "META FIXA" : "META MENSAL") : undefined}
                     metaValue={goals.leads.value > 0 ? FORMATTERS.number(scaledGoals.leads) : undefined}
                     icon={<RefreshCw size={16} />}
@@ -1885,7 +1902,7 @@ ${JSON.stringify(tabData, null, 2)}`
                       <div className="relative z-10">
                         <p className="text-xs sm:text-sm font-medium opacity-80 mb-1 sm:mb-2 uppercase tracking-widest">ROI Estratégico Estimado</p>
                         <p className="text-4xl sm:text-6xl font-black mb-3 sm:mb-4 tracking-tight leading-none italic">
-                          {data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : 0}x
+                          {data.metrics.totalSpend > 0 ? (salesMetricsForAnalysis.totalRevenue / data.metrics.totalSpend).toFixed(1) : 0}x
                         </p>
                         <div className="max-w-[240px]">
                           <p className="text-[9px] sm:text-xs opacity-60 leading-relaxed font-bold uppercase tracking-tighter">
@@ -1902,7 +1919,7 @@ ${JSON.stringify(tabData, null, 2)}`
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
                           <div><p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Investido</p><p className="text-base sm:text-xl font-black text-primary leading-none italic">{FORMATTERS.currency(data.metrics.totalSpend)}</p></div>
-                          <div className="text-right"><p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Vendido</p><p className="text-base sm:text-xl font-black text-emerald-500 leading-none italic">{FORMATTERS.currency(data.metrics.totalRevenue)}</p></div>
+                          <div className="text-right"><p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Vendido</p><p className="text-base sm:text-xl font-black text-emerald-500 leading-none italic">{FORMATTERS.currency(salesMetricsForAnalysis.totalRevenue)}</p></div>
                         </div>
                         <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden flex shadow-inner border border-slate-200 dark:border-slate-800">
                           <div className="h-full bg-primary" style={{ width: '35%' }}></div>
@@ -2231,7 +2248,7 @@ ${JSON.stringify(tabData, null, 2)}`
                     onClick={() => setIsRevenueModalOpen(true)}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block text-emerald-500">
-                        {FORMATTERS.summarizedCurrency(data.metrics.totalRevenue)}
+                        {FORMATTERS.summarizedCurrency(salesMetricsForAnalysis.totalRevenue)}
                       </span>
                     }
                     meta="RECEITA AGREGADA"
@@ -2245,12 +2262,12 @@ ${JSON.stringify(tabData, null, 2)}`
                     onClick={() => setIsMetricModalOpen({
                       isOpen: true,
                       title: "Ticket Médio",
-                      value: FORMATTERS.currency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0),
+                      value: FORMATTERS.currency(salesMetricsForAnalysis.totalUnitsSold > 0 ? salesMetricsForAnalysis.totalRevenue / salesMetricsForAnalysis.totalUnitsSold : 0),
                       subValue: "Valor médio bruto por unidade vendida"
                     })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {FORMATTERS.summarizedCurrency(data.metrics.totalUnitsSold > 0 ? data.metrics.totalRevenue / data.metrics.totalUnitsSold : 0)}
+                        {FORMATTERS.summarizedCurrency(salesMetricsForAnalysis.totalUnitsSold > 0 ? salesMetricsForAnalysis.totalRevenue / salesMetricsForAnalysis.totalUnitsSold : 0)}
                       </span>
                     }
                     meta="VALOR MÉDIO"
@@ -2263,12 +2280,12 @@ ${JSON.stringify(tabData, null, 2)}`
                     onClick={() => setIsMetricModalOpen({
                       isOpen: true,
                       title: "Quantidade de Vendas",
-                      value: FORMATTERS.number(data.metrics.totalUnitsSold),
+                      value: FORMATTERS.number(salesMetricsForAnalysis.totalUnitsSold),
                       subValue: `Meta estabelecida: ${FORMATTERS.number(scaledGoals.quantity)} unidades`
                     })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {FORMATTERS.summarized(data.metrics.totalUnitsSold)}
+                        {FORMATTERS.summarized(salesMetricsForAnalysis.totalUnitsSold)}
                       </span>
                     }
                     meta={goals.quantity.value > 0 ? "PROGRESSO" : undefined}
@@ -2283,12 +2300,12 @@ ${JSON.stringify(tabData, null, 2)}`
                     onClick={() => setIsMetricModalOpen({
                       isOpen: true,
                       title: "Retorno sobre Investimento (ROI)",
-                      value: `${data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(2) : '0.00'}x`,
-                      subValue: `Baseado em ${FORMATTERS.currency(data.metrics.totalRevenue)} de receita sobre ${FORMATTERS.currency(data.metrics.totalSpend)} investidos`
+                      value: `${data.metrics.totalSpend > 0 ? (salesMetricsForAnalysis.totalRevenue / data.metrics.totalSpend).toFixed(2) : '0.00'}x`,
+                      subValue: `Baseado em ${FORMATTERS.currency(salesMetricsForAnalysis.totalRevenue)} de receita sobre ${FORMATTERS.currency(data.metrics.totalSpend)} investidos`
                     })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {data.metrics.totalSpend > 0 ? (data.metrics.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x
+                        {data.metrics.totalSpend > 0 ? (salesMetricsForAnalysis.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x
                       </span>
                     }
                     meta="RETORNO SOBRE INVESTIMENTO"
@@ -2302,12 +2319,12 @@ ${JSON.stringify(tabData, null, 2)}`
                     onClick={() => setIsMetricModalOpen({
                       isOpen: true,
                       title: "Progresso da Meta de Leads",
-                      value: `${scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(2) : '0.00'}%`,
-                      subValue: `${FORMATTERS.number(data.metrics.totalLeads)} leads conquistados de uma meta de ${FORMATTERS.number(scaledGoals.leads)}`
+                      value: `${scaledGoals.leads > 0 ? ((salesMetricsForAnalysis.totalLeads / scaledGoals.leads) * 100).toFixed(2) : '0.00'}%`,
+                      subValue: `${FORMATTERS.number(salesMetricsForAnalysis.totalLeads)} leads conquistados de uma meta de ${FORMATTERS.number(scaledGoals.leads)}`
                     })}
                     value={
                       <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {scaledGoals.leads > 0 ? ((data.metrics.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%
+                        {scaledGoals.leads > 0 ? ((salesMetricsForAnalysis.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%
                       </span>
                     }
                     meta={goals.leads.value > 0 ? "PROGRESSO" : undefined}
