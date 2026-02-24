@@ -39,26 +39,38 @@ export const KPICard: React.FC<KPICardProps> = ({
   const getNumericValue = (val: string | number): number => {
     if (typeof val === 'number') return val;
     if (typeof val === 'string') {
-      // Remove currency symbols and spaces
-      let cleaned = val.replace(/[R$\s]/g, '');
+      let cleaned = val.replace(/[R$\s]/g, '').trim();
+      if (!cleaned) return 0;
 
-      // Check for multipliers BEFORE extracting the number
+      // Handle multipliers
       let multiplier = 1;
       if (cleaned.toLowerCase().includes('mi')) {
-        multiplier = 1000000; // milhões
+        multiplier = 1000000;
         cleaned = cleaned.replace(/mi/gi, '');
       } else if (cleaned.toLowerCase().includes('mil')) {
         multiplier = 1000;
         cleaned = cleaned.replace(/mil/gi, '');
       }
 
-      // Remove percentage sign if exists
       cleaned = cleaned.replace(/%/g, '');
 
-      // Normalize decimal separator (replace comma with dot)
-      const normalized = cleaned.replace(',', '.');
-      const baseValue = parseFloat(normalized) || 0;
+      // Robust parsing for Brazilian format (50.000,00)
+      if (cleaned.includes(',') && cleaned.includes('.')) {
+        if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+          cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+        } else {
+          cleaned = cleaned.replace(/,/g, '');
+        }
+      } else if (cleaned.includes(',')) {
+        const parts = cleaned.split(',');
+        if (parts[parts.length - 1].length <= 2) cleaned = cleaned.replace(',', '.');
+        else cleaned = cleaned.replace(',', '');
+      } else if (cleaned.includes('.')) {
+        const parts = cleaned.split('.');
+        if (parts[parts.length - 1].length > 2) cleaned = cleaned.replace(/\./g, '');
+      }
 
+      const baseValue = parseFloat(cleaned) || 0;
       return baseValue * multiplier;
     }
     return 0;

@@ -394,51 +394,49 @@ const App: React.FC = () => {
     const firstClient = clients.find(c => c.id === firstId);
     const firstUsername = firstClient ? firstClient.user : (firstId === currentUser.id ? currentUser.username : '');
 
-    // Load metas from Supabase based on user ID
-    if (firstId !== 1) {
-      try {
-        const { data: history, error } = await supabase
-          .from('Meta_2')
-          .select('*')
-          .order('id', { ascending: false });
+    // Load metas from Supabase
+    try {
+      const { data: history, error } = await supabase
+        .from('Meta_2')
+        .select('*')
+        .order('id', { ascending: false });
 
-        if (history && !error) {
-          console.log('✅ Histórico de metas carregado:', history);
-          setGoalsHistory(history);
-          const latest = history[0];
-          if (latest) {
-            setActiveGoalId(latest.id);
+      if (history && !error) {
+        console.log('✅ Histórico de metas carregado:', history);
+        setGoalsHistory(history);
+        const latest = history[0];
+        if (latest) {
+          setActiveGoalId(latest.id);
 
-            // Tentar recuperar os modos salvos (em JSON na coluna Config, se existir)
-            let savedModes: any = {};
-            try {
-              if (latest.Config) {
-                const config = typeof latest.Config === 'string' ? JSON.parse(latest.Config) : latest.Config;
-                savedModes = config.modes || {};
-              }
-            } catch (e) { }
+          // Tentar recuperar os modos salvos (em JSON na coluna Config, se existir)
+          let savedModes: any = {};
+          try {
+            if (latest.Config) {
+              const config = typeof latest.Config === 'string' ? JSON.parse(latest.Config) : latest.Config;
+              savedModes = config.modes || {};
+            }
+          } catch (e) { }
 
-            setGoals({
-              amountSpent: { value: latest.Orçamento || 0, mode: 'fixed' },
-              leads: { value: latest.Leads || 0, mode: 'fixed' },
-              cpl: { value: latest.CPL || 0, mode: 'fixed' },
-              ctr: { value: latest.CTR || 0, mode: 'fixed' },
-              cpm: { value: latest.CPM || 0, mode: 'fixed' },
-              frequency: { value: latest.Frequência || 0, mode: 'fixed' },
-              quantity: { value: latest.Quantidade || 0, mode: 'fixed' },
-              mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'fixed' },
-              atendimento: { value: latest.Atendimento || 0, mode: 'fixed' },
-              reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: 'fixed' },
-              reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: 'fixed' },
-              vendas: { value: latest.Vendas || 0, mode: 'fixed' }
-            });
-          }
-        } else if (error) {
-          console.warn('⚠️ Erro ao carregar metas:', error.message);
+          setGoals({
+            amountSpent: { value: latest.Orçamento || 0, mode: 'fixed' },
+            leads: { value: latest.Leads || 0, mode: 'fixed' },
+            cpl: { value: latest.CPL || 0, mode: 'fixed' },
+            ctr: { value: latest.CTR || 0, mode: 'fixed' },
+            cpm: { value: latest.CPM || 0, mode: 'fixed' },
+            frequency: { value: latest.Frequência || 0, mode: 'fixed' },
+            quantity: { value: latest.Quantidade || 0, mode: 'fixed' },
+            mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'fixed' },
+            atendimento: { value: latest.Atendimento || 0, mode: 'fixed' },
+            reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: 'fixed' },
+            reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: 'fixed' },
+            vendas: { value: latest.Vendas || 0, mode: 'fixed' }
+          });
         }
-      } catch (err) {
-        console.warn('Silent skip loading goals from supabase');
+      } else if (error) {
+        console.warn('⚠️ Erro ao carregar metas:', error.message);
       }
+    } catch (err) {
+      console.warn('Silent skip loading goals from supabase');
     }
   };
 
