@@ -866,15 +866,15 @@ const App: React.FC = () => {
     const diff = (actual / target);
 
     if (type === 'higher-better') {
-      // Quanto maior, melhor (Leads, CTR, Vendas, etc)
-      if (diff >= 1.0) return 'EXCELENTE';   // Alcançou ou Superou 100%
-      if (diff >= 0.8) return 'MÉDIA';       // Entre 80% e 99% (Perto da meta)
-      return 'OTIMIZAR';                      // Abaixo de 80% (Precisa melhorar)
+      // Quanto maior, melhor (Leads, CTR, Vendas, Frequência como meta, etc)
+      if (actual >= target) return 'EXCELENTE';
+      if (actual >= target * 0.9) return 'MÉDIA'; // Tolerância de 10%
+      return 'OTIMIZAR';
     } else {
-      // Quanto menor, melhor (CPL, CPM, Investimento, Frequência, etc)
-      if (diff <= 1.0) return 'EXCELENTE';   // Dentro ou abaixo do limite de 100%
-      if (diff <= 1.2) return 'MÉDIA';       // Até 120% (Perto do limite)
-      return 'OTIMIZAR';                      // Acima de 120% (Estourou o limite)
+      // Quanto menor, melhor (CPL, CPM, Investimento, CPC, etc)
+      if (actual <= target) return 'EXCELENTE';
+      if (actual <= target * 1.1) return 'MÉDIA'; // Tolerância de 10%
+      return 'OTIMIZAR';
     }
   };
 
@@ -1092,7 +1092,7 @@ const App: React.FC = () => {
       cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
       ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
       cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
-      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
+      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'higher-better', goals.frequency.mode),
       quantity: calculateStatus(salesMetricsForAnalysis.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
       mensagensEnviadas: (() => {
         const totalLeadsCount = leadsForAnalysis.length || 1;
