@@ -480,7 +480,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0,
         cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
         frequency: countFreqRows > 0 ? sumFreq / countFreqRows : 1,
-        cpl: totalMarketingLeads > 0 ? totalSpend / totalMarketingLeads : 0,
+        cpl: totalMarketingLeads > 0 ? totalSpend / totalMarketingLeads : (totalSpend > 0 ? 999999 : 0),
         reach: totalReach, impressions: totalImpressions, clicks: totalClicks, leads: totalMarketingLeads, landingPageConvRate: 0
       },
       salesMetrics: { avgResponseTime: 'N/A', totalBilling: 0, generalConvRate: 0 },

@@ -881,18 +881,16 @@ const App: React.FC = () => {
   const calculateStatus = (actual: number, target: number, type: 'higher-better' | 'lower-better', mode?: GoalMode): KPIStatus => {
     if (target === 0) return undefined;
 
-    const diff = (actual / target);
-
     if (type === 'higher-better') {
-      // Quanto maior, melhor (Leads, CTR, Vendas, Frequencia, etc)
-      if (actual >= target) return 'EXCELENTE';   // Alcançou ou Superou
-      if (actual >= target * 0.7) return 'MÉDIA'; // Tolerância maior (70%)
-      return 'OTIMIZAR';                          // Abaixo de 70%
+      // Quanto MAIOR melhor (Leads, Vendas, CTR)
+      if (actual >= target) return 'EXCELENTE';
+      if (actual >= target * 0.9) return 'MÉDIA';
+      return 'OTIMIZAR';
     } else {
-      // Quanto menor, melhor (CPL, CPM, Investimento, CPC, etc)
-      if (actual <= target) return 'EXCELENTE';   // Dentro do limite
-      if (actual <= target * 1.3) return 'MÉDIA'; // Tolerância maior (30% acima)
-      return 'OTIMIZAR';                          // Acima de 130% do custo alvo
+      // Quanto MENOR melhor (CPL, CPM, Investimento)
+      if (actual <= target) return 'EXCELENTE';
+      if (actual <= target * 1.1) return 'MÉDIA';
+      return 'OTIMIZAR';
     }
   };
 
@@ -1103,6 +1101,14 @@ const App: React.FC = () => {
 
   const statusMap = useMemo(() => {
     if (!data || !correctedFunnelData) return {};
+    console.log('📈 statusMap DEBUG:', {
+      totalSpend: data.metrics.totalSpend,
+      targetSpend: scaledGoals.amountSpent,
+      cpl: data.metrics.marketingMetrics.cpl,
+      targetCpl: scaledGoals.cpl,
+      totalLeads: salesMetricsForAnalysis.totalLeads,
+      targetLeads: scaledGoals.leads
+    });
     return {
       amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better', goals.amountSpent.mode),
       leads: calculateStatus(salesMetricsForAnalysis.totalLeads, scaledGoals.leads, 'higher-better', goals.leads.mode),
@@ -1881,6 +1887,7 @@ ${JSON.stringify(tabData, null, 2)}`
                     metaValue={goals.cpl.value > 0 ? FORMATTERS.currency(scaledGoals.cpl) : undefined}
                     icon={<CplIcon size={16} />}
                     statusTag={statusMap.cpl}
+                    inverseColors={true}
                   />
                 </div>
 
