@@ -58,6 +58,7 @@ export interface ClientLead {
   date: string;
   tags?: string[];
   statusVenda2?: string;
+  statusVenda2Raw?: string;
   value?: number;
 }
 

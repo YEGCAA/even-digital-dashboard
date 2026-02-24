@@ -348,7 +348,7 @@ const App: React.FC = () => {
         tablesToFetch.push(`Dados_${id}`);
         tablesToFetch.push(`Marketing_${id}`);
         tablesToFetch.push(`Vendas_${id}`);
-        tablesToFetch.push(`Status_Venda_${id}`);
+        tablesToFetch.push(`Status_venda_${id}`);
         tablesToFetch.push(`valores_${id}`);
       }
     });
@@ -922,14 +922,36 @@ const App: React.FC = () => {
     return data.funnelData.map(f => f.stage);
   }, [data]);
 
+  // "Golden" lead list for Funnel and Sales Metrics - respects Venda Status and Tags
+  const leadsForAnalysis = useMemo(() => {
+    if (!data?.leadsList) return [];
+    return data.leadsList.filter(lead => {
+      const sVendaNorm = normalizeText(lead.statusVenda2);
+      const stageNormLocal = normalizeText(lead.stage);
+      const isLost = sVendaNorm.includes('perd') || stageNormLocal.includes('perd');
+      const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || lead.stage === 'Vendas Concluidas';
+      const isActive = !isLost && !isWon;
+
+      let matchesVendaStatus = true;
+      if (selectedVendaStatus === 'Atual') {
+        matchesVendaStatus = isActive || isWon;
+      } else if (selectedVendaStatus === 'Ganho') {
+        matchesVendaStatus = isWon;
+      } else if (selectedVendaStatus === 'Perdido') {
+        matchesVendaStatus = isLost;
+      }
+
+      const matchesTags = selectedTags.length === 0 || (lead.tags && lead.tags.some(tag => selectedTags.includes(tag)));
+      return matchesVendaStatus && matchesTags;
+    });
+  }, [data, selectedVendaStatus, selectedTags]);
+
   // Recalculate funnel data with CUMULATIVE counts (leads in advanced stages count in all previous)
   const correctedFunnelData = useMemo(() => {
-    if (!data?.funnelData || !data?.leadsList) return data?.funnelData || [];
+    if (!data?.funnelData || !leadsForAnalysis) return data?.funnelData || [];
 
-    console.log('📊 Total de leads BRUTO no banco de dados:', data.leadsList.length);
-
-    const uniqueLeads = data.leadsList;
-    console.log('📊 Total de leads sendo usado no funil:', uniqueLeads.length);
+    const uniqueLeads = leadsForAnalysis;
+    console.log('📊 Total de leads filtrados sendo usado no funil:', uniqueLeads.length);
 
     const normalizeStr = (s: string) => s.toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -1008,8 +1030,8 @@ const App: React.FC = () => {
         cumulativeCount = leadsWithIndex
           .filter(lead => {
             const isAtOrAfter = lead.stageIndex >= stageIndex && lead.stageIndex !== -1;
-            const isLost = normalizeStr(String(lead.statusVenda2 || '')).includes('perdido');
-            return isAtOrAfter && !isLost;
+            // No longer filtering out lost leads here as leadsForAnalysis already handles global status selection
+            return isAtOrAfter;
           })
           .reduce((sum, lead) => sum + (lead.quantity || 1), 0);
       }
@@ -1042,7 +1064,7 @@ const App: React.FC = () => {
         conversion: conversion
       };
     });
-  }, [data]);
+  }, [data, leadsForAnalysis, selectedVendaStatus]);
 
   const statusMap = useMemo(() => {
     if (!data || !correctedFunnelData) return {};
@@ -1055,7 +1077,7 @@ const App: React.FC = () => {
       frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
       quantity: calculateStatus(data.metrics.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
       mensagensEnviadas: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
+        const totalLeadsCount = leadsForAnalysis.length || 1;
         const stage = correctedFunnelData.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'mensageminicial'.toLowerCase();
@@ -1065,7 +1087,7 @@ const App: React.FC = () => {
         return calculateStatus(actualPercent, scaledGoals.mensagensEnviadas, 'higher-better', goals.mensagensEnviadas.mode);
       })(),
       atendimento: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
+        const totalLeadsCount = leadsForAnalysis.length || 1;
         const stage = correctedFunnelData.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'ematendimento'.toLowerCase();
@@ -1075,7 +1097,7 @@ const App: React.FC = () => {
         return calculateStatus(actualPercent, scaledGoals.atendimento, 'higher-better', goals.atendimento.mode);
       })(),
       reuniaoMarcada: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
+        const totalLeadsCount = leadsForAnalysis.length || 1;
         const stage = correctedFunnelData.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'reuniaoagendada'.toLowerCase();
@@ -1085,7 +1107,7 @@ const App: React.FC = () => {
         return calculateStatus(actualPercent, scaledGoals.reuniaoMarcada, 'higher-better', goals.reuniaoMarcada.mode);
       })(),
       reuniaoRealizada: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
+        const totalLeadsCount = leadsForAnalysis.length || 1;
         const stage = correctedFunnelData.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'reuniaorealizada'.toLowerCase();
@@ -1095,7 +1117,7 @@ const App: React.FC = () => {
         return calculateStatus(actualPercent, scaledGoals.reuniaoRealizada, 'higher-better', goals.reuniaoRealizada.mode);
       })(),
       vendas: (() => {
-        const totalLeadsCount = data.leadsList.length || 1;
+        const totalLeadsCount = leadsForAnalysis.length || 1;
         const stage = correctedFunnelData.find(s => {
           const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
           const tNorm = 'vendasconcluidas'.toLowerCase();
@@ -1105,7 +1127,7 @@ const App: React.FC = () => {
         return calculateStatus(actualPercent, scaledGoals.vendas, 'higher-better', goals.vendas.mode);
       })()
     };
-  }, [data, scaledGoals, correctedFunnelData]);
+  }, [data, scaledGoals, correctedFunnelData, leadsForAnalysis]);
 
   // Filtered funnel for Overview page - show only specific stages
   const filteredFunnelForOverview = useMemo(() => {
@@ -1178,7 +1200,7 @@ const App: React.FC = () => {
       // Apply venda status filter
       let matchesVendaStatus = true;
       if (selectedVendaStatus === 'Atual') {
-        matchesVendaStatus = isActive;
+        matchesVendaStatus = isActive || isWon;
       } else if (selectedVendaStatus === 'Ganho') {
         matchesVendaStatus = isWon;
       } else if (selectedVendaStatus === 'Perdido') {
@@ -2298,7 +2320,7 @@ ${JSON.stringify(tabData, null, 2)}`
                 {/* Conversion Metrics KPI Cards - SECOND ROW */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   {(() => {
-                    const totalLeadsCount = data.leadsList.length || 1;
+                    const totalLeadsCount = leadsForAnalysis.length || 1;
                     const getCumulativePercent = (stageName: string) => {
                       const stage = correctedFunnelData.find(s => {
                         const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
@@ -2521,6 +2543,16 @@ ${JSON.stringify(tabData, null, 2)}`
                             stageNorm.includes(leadStageNorm);
                         });
 
+                        // DEBUG Ebert in Kanban
+                        const ebertInThisStage = allStageLeads.filter(l => l.name.toLowerCase().includes('eberte') || l.name.toLowerCase().includes('ebert'));
+                        if (ebertInThisStage.length > 0) {
+                          console.log(`💎 Found Ebert in stage loop: ${stage.stage}`, {
+                            count: ebertInThisStage.length,
+                            pipeline: ebertInThisStage[0].pipeline,
+                            status: ebertInThisStage[0].statusVenda2
+                          });
+                        }
+
                         // Apply search and tag filters only for display
                         const stageLeads = allStageLeads.filter(lead => {
                           const searchNorm = normalizeText(salesSearch);
@@ -2561,7 +2593,8 @@ ${JSON.stringify(tabData, null, 2)}`
 
                           return matchesSearch && matchesTags && matchesVendaStatus && matchesPipeline;
                         });
-                        const percentage = data.funnelData[0]?.count ? ((stage.count / data.funnelData[0].count) * 100).toFixed(1) : '0';
+                        const correctedStage = correctedFunnelData.find(s => s.stage === stage.stage);
+                        const percentage = correctedFunnelData[0]?.count ? (((correctedStage?.count || 0) / correctedFunnelData[0].count) * 100).toFixed(1) : '0';
 
                         return (
                           <div
@@ -2801,6 +2834,11 @@ ${JSON.stringify(tabData, null, 2)}`
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                                     {new Date(lead.date).toLocaleDateString('pt-BR')}
                                   </p>
+                                  {lead.statusVenda2Raw && (
+                                    <div className="mt-2 inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[8px] font-bold text-slate-500 uppercase tracking-tighter border border-slate-200 dark:border-slate-600">
+                                      CRM: {lead.statusVenda2Raw}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
