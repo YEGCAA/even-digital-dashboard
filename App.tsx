@@ -866,15 +866,15 @@ const App: React.FC = () => {
     const diff = (actual / target);
 
     if (type === 'higher-better') {
-      // Quanto maior, melhor (Leads, CTR, etc)
-      if (diff >= 1.0) return 'EXCELENTE';   // >= 100% da meta - ATINGIU ou SUPEROU
-      if (diff >= 0.90) return 'MÉDIA';      // >= 90% da meta - PRÓXIMO
-      return 'OTIMIZAR';                      // < 90% da meta - PRECISA MELHORAR
+      // Quanto maior, melhor (Leads, CTR, Vendas, etc)
+      if (diff >= 1.0) return 'EXCELENTE';   // Alcançou ou Superou 100%
+      if (diff >= 0.8) return 'MÉDIA';       // Entre 80% e 99% (Perto da meta)
+      return 'OTIMIZAR';                      // Abaixo de 80% (Precisa melhorar)
     } else {
-      // Quanto menor, melhor (CPL, CPM, Gastos, etc)
-      if (diff <= 1.0) return 'EXCELENTE';   // <= 100% da meta - ATINGIU ou FICOU ABAIXO
-      if (diff <= 1.10) return 'MÉDIA';      // <= 110% da meta - PRÓXIMO
-      return 'OTIMIZAR';                      // > 110% da meta - PRECISA MELHORAR
+      // Quanto menor, melhor (CPL, CPM, Investimento, Frequência, etc)
+      if (diff <= 1.0) return 'EXCELENTE';   // Dentro ou abaixo do limite de 100%
+      if (diff <= 1.2) return 'MÉDIA';       // Até 120% (Perto do limite)
+      return 'OTIMIZAR';                      // Acima de 120% (Estourou o limite)
     }
   };
 
@@ -1088,6 +1088,7 @@ const App: React.FC = () => {
     return {
       amountSpent: calculateStatus(data.metrics.totalSpend, scaledGoals.amountSpent, 'lower-better', goals.amountSpent.mode),
       leads: calculateStatus(salesMetricsForAnalysis.totalLeads, scaledGoals.leads, 'higher-better', goals.leads.mode),
+      marketingLeads: calculateStatus(data.metrics.marketingMetrics.leads, scaledGoals.leads, 'higher-better', goals.leads.mode),
       cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
       ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
       cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
@@ -2103,7 +2104,7 @@ ${JSON.stringify(tabData, null, 2)}`
                       { title: "Cliques", val: FORMATTERS.number(data.metrics.marketingMetrics.clicks), icon: <MousePointer2 size={14} />, meta: "Cliques no Link" },
                       { title: "CPC (Custo p/ Click)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpc), icon: <DollarSign size={14} />, meta: "Custo Médio" },
                       { title: "CTR (Taxa Click Link)", val: FORMATTERS.percent(data.metrics.marketingMetrics.ctr), icon: <Percent size={14} />, meta: FORMATTERS.percent(scaledGoals.ctr), status: statusMap.ctr },
-                      { title: "Leads (Plataforma)", val: FORMATTERS.number(data.metrics.marketingMetrics.leads), icon: <Users size={14} />, meta: FORMATTERS.number(scaledGoals.leads), status: statusMap.leads }, // Updated to use direct leads metric
+                      { title: "Leads (Plataforma)", val: FORMATTERS.number(data.metrics.marketingMetrics.leads), icon: <Users size={14} />, meta: FORMATTERS.number(scaledGoals.leads), status: statusMap.marketingLeads }, // Uses platform leads status
                       { title: "CPL (Custo p/ Lead)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpl), icon: <CplIcon size={14} />, meta: FORMATTERS.currency(scaledGoals.cpl), status: statusMap.cpl }
                     ].map((kpi, idx) => (
                       <div key={idx} className="px-4 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
