@@ -68,7 +68,7 @@ export const StatusBadge = ({ status }: { status: KPIStatus }) => {
   };
 
   return (
-    <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-black border-b-2 ${getStatusStyles()} uppercase tracking-tighter animate-in fade-in zoom-in duration-300 whitespace-nowrap min-w-[50px]`}>
+    <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-[9px] font-black border-b-2 ${getStatusStyles()} uppercase tracking-tighter animate-in fade-in zoom-in duration-300 whitespace-nowrap min-w-[60px] cursor-default`}>
       {status}
     </span>
   );
@@ -158,23 +158,43 @@ const App: React.FC = () => {
 
   const activeAiKey = (openaiKey || getInternalKey()).trim();
 
+  const parseGoalNumeric = (val: any): number => {
+    if (val === null || val === undefined || val === "") return 0;
+    if (typeof val === 'number') return val;
+    let s = val.toString().replace(/[R$\sBRL]/g, '').trim();
+    if (!s) return 0;
+    if (s.includes(',') && s.includes('.')) {
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        s = s.replace(/,/g, '');
+      }
+    } else if (s.includes(',')) {
+      const parts = s.split(',');
+      if (parts[parts.length - 1].length <= 2) s = s.replace(',', '.');
+      else s = s.replace(',', '');
+    } else if (s.includes('.')) {
+      const parts = s.split('.');
+      if (parts[parts.length - 1].length > 2) s = s.replace(/\./g, '');
+    }
+    const num = parseFloat(s);
+    return isNaN(num) ? 0 : num;
+  };
 
   const GoalInput = ({ value, onChange, placeholder }: { value: number, onChange: (val: number) => void, placeholder?: string }) => {
     // We use a local string state to allow free typing without triggering parent re-renders
     const [localValue, setLocalValue] = useState(String(value));
 
     // Only update local value if the external value changes and it's numerically different
-    // (This usually happens when loading data or resetting)
     useEffect(() => {
-      const numLocal = parseFloat(localValue.replace(',', '.'));
-      if (isNaN(numLocal) || numLocal !== value) {
+      const numLocal = parseGoalNumeric(localValue);
+      if (numLocal !== value) {
         setLocalValue(String(value));
       }
     }, [value]);
 
     const handleBlur = () => {
-      const parsed = parseFloat(localValue.replace(',', '.'));
-      const finalValue = isNaN(parsed) ? 0 : parsed;
+      const finalValue = parseGoalNumeric(localValue);
       // ONLY update the parent state here to avoid layout jumps during typing
       onChange(finalValue);
       setLocalValue(String(finalValue));
@@ -866,15 +886,15 @@ const App: React.FC = () => {
     const diff = (actual / target);
 
     if (type === 'higher-better') {
-      // Quanto maior, melhor (Leads, CTR, Vendas, Frequência como meta, etc)
-      if (actual >= target) return 'EXCELENTE';
-      if (actual >= target * 0.9) return 'MÉDIA'; // Tolerância de 10%
-      return 'OTIMIZAR';
+      // Quanto maior, melhor (Leads, CTR, Vendas, Frequencia, etc)
+      if (actual >= target) return 'EXCELENTE';   // Alcançou ou Superou
+      if (actual >= target * 0.7) return 'MÉDIA'; // Tolerância maior (70%)
+      return 'OTIMIZAR';                          // Abaixo de 70%
     } else {
       // Quanto menor, melhor (CPL, CPM, Investimento, CPC, etc)
-      if (actual <= target) return 'EXCELENTE';
-      if (actual <= target * 1.1) return 'MÉDIA'; // Tolerância de 10%
-      return 'OTIMIZAR';
+      if (actual <= target) return 'EXCELENTE';   // Dentro do limite
+      if (actual <= target * 1.3) return 'MÉDIA'; // Tolerância maior (30% acima)
+      return 'OTIMIZAR';                          // Acima de 130% do custo alvo
     }
   };
 
@@ -1092,7 +1112,7 @@ const App: React.FC = () => {
       cpl: calculateStatus(data.metrics.marketingMetrics.cpl, scaledGoals.cpl, 'lower-better', goals.cpl.mode),
       ctr: calculateStatus(data.metrics.marketingMetrics.ctr, scaledGoals.ctr, 'higher-better', goals.ctr.mode),
       cpm: calculateStatus(data.metrics.marketingMetrics.cpm, scaledGoals.cpm, 'lower-better', goals.cpm.mode),
-      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'higher-better', goals.frequency.mode),
+      frequency: calculateStatus(data.metrics.marketingMetrics.frequency, scaledGoals.frequency, 'lower-better', goals.frequency.mode),
       quantity: calculateStatus(salesMetricsForAnalysis.totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode),
       mensagensEnviadas: (() => {
         const totalLeadsCount = leadsForAnalysis.length || 1;
