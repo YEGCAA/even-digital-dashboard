@@ -35,13 +35,35 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
             return null;
         };
 
-        const parseNum = (val: any) => {
-            if (!val) return 0;
-            const str = String(val).replace(/[R$\s]/g, '');
-            // Handle comma/dot variations
-            if (str.includes(',') && str.includes('.')) { return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0; }
-            if (str.includes(',')) { return parseFloat(str.replace(',', '.')) || 0; }
-            return parseFloat(str) || 0;
+        const parseNum = (val: any): number => {
+            if (val === null || val === undefined || val === "" || val === "---") return 0;
+            if (typeof val === 'number') return val;
+            let s = val.toString().replace(/[R$\sBRL]/g, '').trim();
+            while (s.length > 0 && !/[0-9]/.test(s.slice(-1))) {
+                s = s.slice(0, -1).trim();
+            }
+            if (!s) return 0;
+            if (s.includes(',') && s.includes('.')) {
+                if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+                    s = s.replace(/\./g, '').replace(',', '.');
+                } else {
+                    s = s.replace(/,/g, '');
+                }
+            } else if (s.includes(',')) {
+                const parts = s.split(',');
+                if (parts[parts.length - 1].length <= 2) {
+                    s = s.replace(',', '.');
+                } else {
+                    s = s.replace(',', '');
+                }
+            } else if (s.includes('.')) {
+                const parts = s.split('.');
+                if (parts[parts.length - 1].length > 2) {
+                    s = s.replace(/\./g, '');
+                }
+            }
+            const num = parseFloat(s);
+            return isNaN(num) ? 0 : num;
         };
 
         data.forEach(row => {
@@ -59,14 +81,16 @@ export const MarketingEvolutionChart: React.FC<MarketingEvolutionChartProps> = (
                 // Se já está no formato YYYY-MM-DD, usar diretamente
                 if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
                     key = dateStr;
+                } else if (dateStr.includes('T')) {
+                    // Optimized for ISO strings: 2026-02-23T00:00:00+00:00 -> 2026-02-23
+                    key = dateStr.split('T')[0];
                 } else {
-                    // Caso contrário, converter mas usar apenas a parte da data local
                     const d = new Date(dateVal);
                     if (isNaN(d.getTime())) return;
-                    // Usar getFullYear, getMonth, getDate para evitar timezone issues
-                    const year = d.getFullYear();
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
+                    // Use UTC to avoid local timezone shifts
+                    const year = d.getUTCFullYear();
+                    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(d.getUTCDate()).padStart(2, '0');
                     key = `${year}-${month}-${day}`;
                 }
 

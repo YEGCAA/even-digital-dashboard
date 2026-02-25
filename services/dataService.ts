@@ -3,17 +3,19 @@ import { DashboardData, FunnelStage, ClientLead, CreativePlayback } from '../typ
 import { supabase } from './supabase';
 
 const parseNumeric = (val: any): number => {
-  if (val === null || val === undefined || val === "") return 0;
+  if (val === null || val === undefined || val === "" || val === "---") return 0;
   if (typeof val === 'number') return val;
 
   let s = val.toString().replace(/[R$\sBRL]/g, '').trim();
 
+  // Remove any trailing non-numeric characters (like labels or symbols)
   while (s.length > 0 && !/[0-9]/.test(s.slice(-1))) {
     s = s.slice(0, -1).trim();
   }
 
   if (!s) return 0;
 
+  // Handle Brazilian format with both separators: 1.234,56 -> 1234.56
   if (s.includes(',') && s.includes('.')) {
     if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
       s = s.replace(/\./g, '').replace(',', '.');
@@ -21,6 +23,8 @@ const parseNumeric = (val: any): number => {
       s = s.replace(/,/g, '');
     }
   } else if (s.includes(',')) {
+    // If only comma, usually decimal: 12,34 -> 12.34
+    // But could be thousands: 1,234 (unlikely in BR but possible)
     const parts = s.split(',');
     if (parts[parts.length - 1].length <= 2) {
       s = s.replace(',', '.');
@@ -28,6 +32,7 @@ const parseNumeric = (val: any): number => {
       s = s.replace(',', '');
     }
   } else if (s.includes('.')) {
+    // If only dot, could be decimal (11.09) or thousands (1.200)
     const parts = s.split('.');
     if (parts[parts.length - 1].length > 2) {
       s = s.replace(/\./g, '');
@@ -42,10 +47,26 @@ const normalizeStr = (s: string) => s.toLowerCase()
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[\s_]/g, '');
 
+const normalizeDateStr = (dStr: any) => {
+  if (!dStr || dStr === "---") return "";
+  let s = String(dStr).trim();
+  if (s.includes('T')) s = s.split('T')[0];
+  if (s.includes('/') && s.split('/').length === 3) {
+    const parts = s.split('/');
+    if (parts[0].length === 4) {
+      s = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    } else {
+      s = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  return s;
+};
+
 const findValue = (row: any, keys: string[]) => {
   if (!row) return null;
   const rowKeys = Object.keys(row);
 
+  // Step 1: Exact Match (Case/Space Insensitive)
   for (const key of keys) {
     const normalizedSearchKey = normalizeStr(key);
     const found = rowKeys.find(rk => normalizeStr(rk) === normalizedSearchKey);
@@ -54,9 +75,15 @@ const findValue = (row: any, keys: string[]) => {
     }
   }
 
+  // Step 2: Contains Match (Avoid "Cost per" when looking for metrics)
+  // This prevents picking up "Cost per Result" when looking for "Results"
   for (const key of keys) {
     const normalizedSearchKey = normalizeStr(key);
-    const found = rowKeys.find(rk => normalizeStr(rk).includes(normalizedSearchKey));
+    const found = rowKeys.find(rk => {
+      const nrk = normalizeStr(rk);
+      if (nrk.includes("custo") || nrk.includes("cost")) return false; // Skip cost columns here
+      return nrk.includes(normalizedSearchKey);
+    });
     if (found && row[found] !== null && row[found] !== "" && row[found] !== undefined) {
       return row[found];
     }
@@ -115,8 +142,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   let leadsList: ClientLead[] = [];
   const creativeMap: Record<string, CreativePlayback> = {};
 
-  let sumFreq = 0;
-  let countFreqRows = 0;
+  let totalReachAgg = 0;
+  let totalImpressionsAgg = 0;
 
   const marketingTables = fetchedTables.filter(t => t.toLowerCase().includes('marketing'));
   const salesTables = fetchedTables.filter(t => t.toLowerCase().includes('venda') && !t.toLowerCase().includes('status'));
@@ -201,23 +228,10 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     let isWithinDateFilter = true;
     if (filterStartDate || filterEndDate) {
       const rowDateRaw = row.Date || row.Day || row.dia || row.data || row.created_at;
-      if (rowDateRaw) {
-        let dateStr = String(rowDateRaw);
-        if (dateStr.includes('/') && dateStr.split('/').length === 3) {
-          const [day, month, year] = dateStr.split('/');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        const rowDate = new Date(dateStr);
-        if (!isNaN(rowDate.getTime())) {
-          if (filterStartDate) {
-            const start = new Date(filterStartDate + "T00:00:00");
-            if (rowDate < start) isWithinDateFilter = false;
-          }
-          if (filterEndDate) {
-            const end = new Date(filterEndDate + "T23:59:59");
-            if (rowDate > end) isWithinDateFilter = false;
-          }
-        }
+      const rowDateNorm = normalizeDateStr(rowDateRaw);
+      if (rowDateNorm) {
+        if (filterStartDate && rowDateNorm < filterStartDate) isWithinDateFilter = false;
+        if (filterEndDate && rowDateNorm > filterEndDate) isWithinDateFilter = false;
       }
     }
 
@@ -228,25 +242,29 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       totalImpressions += parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
       totalClicks += parseNumeric(findValue(row, ["Link Clicks", "Cliques", "Clicks"]));
 
-      const freq = parseNumeric(findValue(row, ["Frequency", "Frequencia", "frequency_score"]));
-      if (freq > 0) {
-        sumFreq += freq;
-        countFreqRows++;
-      }
+      // Aggregates for global frequency
+      totalReachAgg += parseNumeric(findValue(row, ["Reach", "Alcance"]));
+      totalImpressionsAgg += parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
     }
 
-    const adName = findValue(row, ["Ad Name", "Nome do Anuncio", "Anuncio", "ad_name", "Anúncio"]) || "Sem Nome";
-    if (!creativeMap[adName]) {
-      creativeMap[adName] = {
-        adName,
-        campaign: String(findValue(row, ["Campaign"]) || "N/A"),
-        adSet: String(findValue(row, ["Ad Set Name"]) || "N/A"),
-        views3s: 0, p25: 0, p50: 0, p75: 0, p95: 0, p100: 0, retentionRate: 0,
-        date: String(findValue(row, ["Date"]) || "")
-      };
+    if (isWithinDateFilter) {
+      const adName = findValue(row, ["Ad Name", "Nome do Anuncio", "Anuncio", "ad_name", "Anúncio"]) || "Sem Nome";
+      if (!creativeMap[adName]) {
+        creativeMap[adName] = {
+          adName,
+          campaign: String(findValue(row, ["Campaign"]) || "N/A"),
+          adSet: String(findValue(row, ["Ad Set Name"]) || "N/A"),
+          views3s: 0, p25: 0, p50: 0, p75: 0, p95: 0, p100: 0, retentionRate: 0,
+          date: String(findValue(row, ["Date"]) || "")
+        };
+      }
+      creativeMap[adName].views3s += parseNumeric(findValue(row, ["3-Second Video Views"]));
+      creativeMap[adName].p25 += parseNumeric(findValue(row, ["Video Watches at 25"]));
+      creativeMap[adName].p50 += parseNumeric(findValue(row, ["Video Watches at 50"]));
+      creativeMap[adName].p75 += parseNumeric(findValue(row, ["Video Watches at 75"]));
+      creativeMap[adName].p95 += parseNumeric(findValue(row, ["Video Watches at 95"]));
+      creativeMap[adName].p100 += parseNumeric(findValue(row, ["Video Watches at 100"]));
     }
-    creativeMap[adName].views3s += parseNumeric(findValue(row, ["3-Second Video Views"]));
-    creativeMap[adName].p100 += parseNumeric(findValue(row, ["Video Watches at 100%"]));
   });
 
   dadosRows.forEach(row => {
@@ -261,14 +279,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
   const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
   const isDateToday = (dStr: string) => {
-    if (!dStr || dStr === "---") return false;
-    let s = dStr.trim();
-    if (s.includes('/') && s.split('/').length === 3) {
-      const [d, m, y] = s.split('/');
-      s = `${y}-${m}-${d}`;
-    }
-    if (s.includes('T')) s = s.split('T')[0];
-    return s === todayStr;
+    const rowDateNorm = normalizeDateStr(dStr);
+    return rowDateNorm === todayStr;
   };
 
   salesRows.forEach((row, index) => {
@@ -362,19 +374,11 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const pipelineName = String(findValue(sRow, ["Pipeline", "pipeline", "funil"]) || "");
     const finalPipeline = normalizeStr(pipelineName).includes("reserva") ? "Reserva do Sal" : "High Contorno";
 
-    // Date filtering for status rows
     let isWithinDate = true;
-    if (entryDate !== "---") {
-      let dStr = entryDate;
-      if (dStr.includes('/') && dStr.split('/').length === 3) {
-        const [d, m, y] = dStr.split('/');
-        dStr = `${y}-${m}-${d}`;
-      }
-      const dObj = new Date(dStr);
-      if (!isNaN(dObj.getTime())) {
-        if (filterStartDate && dObj < new Date(filterStartDate + "T00:00:00")) isWithinDate = false;
-        if (filterEndDate && dObj > new Date(filterEndDate + "T23:59:59")) isWithinDate = false;
-      }
+    const entryDateNorm = normalizeDateStr(entryDate);
+    if (entryDateNorm) {
+      if (filterStartDate && entryDateNorm < filterStartDate) isWithinDate = false;
+      if (filterEndDate && entryDateNorm > filterEndDate) isWithinDate = false;
     }
 
     if (isWithinDate && (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline)))) {
@@ -479,8 +483,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         cpm: totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0,
         ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0,
         cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
-        frequency: countFreqRows > 0 ? sumFreq / countFreqRows : 1,
-        cpl: totalMarketingLeads > 0 ? totalSpend / totalMarketingLeads : (totalSpend > 0 ? 999999 : 0),
+        frequency: totalReachAgg > 0 ? totalImpressionsAgg / totalReachAgg : 1,
+        cpl: totalMarketingLeads > 0 ? totalSpend / totalMarketingLeads : 0,
         reach: totalReach, impressions: totalImpressions, clicks: totalClicks, leads: totalMarketingLeads, landingPageConvRate: 0
       },
       salesMetrics: { avgResponseTime: 'N/A', totalBilling: 0, generalConvRate: 0 },

@@ -4,7 +4,7 @@ import { useCountAnimation } from '../hooks/useCountAnimation';
 
 
 export type KPITrend = 'up' | 'down' | 'neutral';
-export type KPIStatus = 'EXCELENTE' | 'MÉDIA' | 'OTIMIZAR' | 'BOM' | 'RUIM' | undefined;
+export type KPIStatus = 'EXCELENTE' | 'MÉDIA' | 'OTIMIZAR' | 'OTIMIZAR MÉDIA' | 'BOM' | 'RUIM' | undefined;
 
 interface KPICardProps {
   title: string;
@@ -151,6 +151,7 @@ export const KPICard: React.FC<KPICardProps> = ({
       case 'BOM': return 'bg-emerald-50 dark:bg-emerald-900/10';
       case 'MÉDIA': return 'bg-blue-50 dark:bg-blue-900/10';
       case 'OTIMIZAR': return 'bg-orange-50 dark:bg-orange-900/10';
+      case 'OTIMIZAR MÉDIA': return 'bg-orange-50 dark:bg-orange-900/10';
       case 'RUIM': return 'bg-orange-50 dark:bg-orange-900/10';
       default: return 'bg-blue-50 dark:bg-blue-900/10';
     }
@@ -169,6 +170,7 @@ export const KPICard: React.FC<KPICardProps> = ({
       case 'BOM': return 'text-emerald-500';
       case 'MÉDIA': return 'text-blue-500';
       case 'OTIMIZAR': return 'text-orange-500';
+      case 'OTIMIZAR MÉDIA': return 'text-orange-500';
       case 'RUIM': return 'text-orange-500';
       default: return 'text-primary';
     }
@@ -177,7 +179,7 @@ export const KPICard: React.FC<KPICardProps> = ({
   const getAccentClass = () => {
     if (statusTag === 'BOM' || statusTag === 'EXCELENTE') return 'card-accent-green';
     if (statusTag === 'MÉDIA') return 'card-accent-blue';
-    if (statusTag === 'OTIMIZAR' || statusTag === 'RUIM') return 'card-accent-amber';
+    if (statusTag === 'OTIMIZAR' || statusTag === 'OTIMIZAR MÉDIA' || statusTag === 'RUIM') return 'card-accent-amber';
 
     const t = title.toLowerCase();
     if (t.includes('vgv') || t.includes('faturamento') || t.includes('venda')) return 'card-accent-green';

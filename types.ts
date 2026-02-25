@@ -12,7 +12,7 @@ export interface UserAuth {
   role: 'admin' | 'user';
 }
 
-export type GoalMode = 'fixed';
+export type GoalMode = 'fixo' | 'diario' | 'mensal';
 
 export interface DashboardGoals {
   amountSpent: { value: number; mode: GoalMode };

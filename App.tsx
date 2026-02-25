@@ -39,17 +39,28 @@ const getRowValue = (row: any, possibleKeys: string[]) => {
 
 const parseCurrencyValue = (val: string | null): number => {
   if (!val) return 0;
-  // Remove currency symbols, spaces, and normalize decimal separator
-  // Assuming input might be "R$ 1.200,50" or "1200.50"
   let clean = val.replace(/[R$\s]/g, '');
   if (clean.includes(',') && clean.includes('.')) {
-    // Mixed separators (e.g. 1.200,50), remove dots, replace comma with dot
     clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (clean.includes(',')) {
-    // Only comma (e.g. 1200,50), replace with dot
     clean = clean.replace(',', '.');
   }
   return parseFloat(clean) || 0;
+};
+
+const normalizeDateStr = (dStr: any) => {
+  if (!dStr || dStr === "---") return "";
+  let s = String(dStr).trim();
+  if (s.includes('T')) s = s.split('T')[0];
+  if (s.includes('/') && s.split('/').length === 3) {
+    const parts = s.split('/');
+    if (parts[0].length === 4) {
+      s = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    } else {
+      s = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  return s;
 };
 
 const CAMPAIGN_KEYS = ["Campaign", "Campanha", "campaign_name", "Campaign Name"];
@@ -63,6 +74,7 @@ export const StatusBadge = ({ status }: { status: KPIStatus }) => {
       case 'EXCELENTE': return 'bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/30';
       case 'MÉDIA': return 'bg-blue-600 text-white border-blue-700 shadow-sm shadow-blue-500/20';
       case 'OTIMIZAR': return 'bg-orange-500 text-white border-orange-600 shadow-sm shadow-orange-500/20';
+      case 'OTIMIZAR MÉDIA': return 'bg-orange-600 text-white border-orange-700 shadow-sm shadow-orange-500/30';
       default: return 'bg-slate-500 text-white border-slate-600';
     }
   };
@@ -96,19 +108,19 @@ const App: React.FC = () => {
 
   const [goals, setGoals] = useState<DashboardGoals>(() => {
     const saved = localStorage.getItem(`even_goals_${currentUser?.id || 'default'}`);
-    const defaultGoals = {
-      amountSpent: { value: 0, mode: 'fixed' as GoalMode },
-      leads: { value: 0, mode: 'fixed' as GoalMode },
-      cpl: { value: 0, mode: 'fixed' as GoalMode },
-      ctr: { value: 0, mode: 'fixed' as GoalMode },
-      cpm: { value: 0, mode: 'fixed' as GoalMode },
-      frequency: { value: 0, mode: 'fixed' as GoalMode },
-      quantity: { value: 0, mode: 'fixed' as GoalMode },
-      mensagensEnviadas: { value: 0, mode: 'fixed' as GoalMode },
-      atendimento: { value: 0, mode: 'fixed' as GoalMode },
-      reuniaoMarcada: { value: 0, mode: 'fixed' as GoalMode },
-      reuniaoRealizada: { value: 0, mode: 'fixed' as GoalMode },
-      vendas: { value: 0, mode: 'fixed' as GoalMode }
+    const defaultGoals: DashboardGoals = {
+      amountSpent: { value: 0, mode: 'fixo' },
+      leads: { value: 0, mode: 'fixo' },
+      cpl: { value: 0, mode: 'fixo' },
+      ctr: { value: 0, mode: 'fixo' },
+      cpm: { value: 0, mode: 'fixo' },
+      frequency: { value: 0, mode: 'fixo' },
+      quantity: { value: 0, mode: 'fixo' },
+      mensagensEnviadas: { value: 0, mode: 'fixo' },
+      atendimento: { value: 0, mode: 'fixo' },
+      reuniaoMarcada: { value: 0, mode: 'fixo' },
+      reuniaoRealizada: { value: 0, mode: 'fixo' },
+      vendas: { value: 0, mode: 'fixo' }
     };
 
     if (saved) {
@@ -118,14 +130,18 @@ const App: React.FC = () => {
         return {
           ...defaultGoals,
           ...parsed,
-          amountSpent: { value: parsed.amountSpent?.value || 0, mode: 'fixed' },
-          leads: { value: parsed.leads?.value || 0, mode: 'fixed' },
-          quantity: { value: parsed.quantity?.value || 0, mode: 'fixed' },
-          mensagensEnviadas: { value: parsed.mensagensEnviadas?.value || 0, mode: 'fixed' },
-          atendimento: { value: parsed.atendimento?.value || 0, mode: 'fixed' },
-          reuniaoMarcada: { value: parsed.reuniaoMarcada?.value || 0, mode: 'fixed' },
-          reuniaoRealizada: { value: parsed.reuniaoRealizada?.value || 0, mode: 'fixed' },
-          vendas: { value: parsed.vendas?.value || 0, mode: 'fixed' }
+          amountSpent: { value: parsed.amountSpent?.value ?? 0, mode: parsed.amountSpent?.mode || 'fixo' },
+          leads: { value: parsed.leads?.value ?? 0, mode: parsed.leads?.mode || 'fixo' },
+          cpl: { value: parsed.cpl?.value ?? 0, mode: parsed.cpl?.mode || 'fixo' },
+          ctr: { value: parsed.ctr?.value ?? 0, mode: parsed.ctr?.mode || 'fixo' },
+          cpm: { value: parsed.cpm?.value ?? 0, mode: parsed.cpm?.mode || 'fixo' },
+          frequency: { value: parsed.frequency?.value ?? 0, mode: parsed.frequency?.mode || 'fixo' },
+          quantity: { value: parsed.quantity?.value ?? 0, mode: parsed.quantity?.mode || 'fixo' },
+          mensagensEnviadas: { value: parsed.mensagensEnviadas?.value ?? 0, mode: 'fixo' },
+          atendimento: { value: parsed.atendimento?.value ?? 0, mode: 'fixo' },
+          reuniaoMarcada: { value: parsed.reuniaoMarcada?.value ?? 0, mode: 'fixo' },
+          reuniaoRealizada: { value: parsed.reuniaoRealizada?.value ?? 0, mode: 'fixo' },
+          vendas: { value: parsed.vendas?.value ?? 0, mode: 'fixo' }
         };
       } catch (e) {
         console.error('Erro ao carregar metas do localStorage:', e);
@@ -220,25 +236,46 @@ const App: React.FC = () => {
     );
   };
 
-  const GoalInputCard = ({ icon: Icon, title, metricKey }: { icon: any, title: string, metricKey: keyof DashboardGoals }) => (
-    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 hover:shadow-md transition-shadow group">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-slate-400 group-hover:text-primary transition-colors">
-          <Icon size={18} />
+  const GoalInputCard = ({ icon: Icon, title, metricKey }: { icon: any, title: string, metricKey: keyof DashboardGoals }) => {
+    const isSpecialMetric = ['mensagensEnviadas', 'atendimento', 'reuniaoMarcada', 'reuniaoRealizada', 'vendas'].includes(metricKey);
+
+    return (
+      <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 hover:shadow-md transition-shadow group">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-slate-400 group-hover:text-primary transition-colors">
+              <Icon size={18} />
+            </div>
+            <h4 className="text-sm font-bold text-slate-700 dark:text-white">{title}</h4>
+          </div>
+          {!isSpecialMetric && (
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+              {(['fixo', 'diario', 'mensal'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], mode: m } })}
+                  className={`px-2 py-1 text-[8px] font-black uppercase rounded-md transition-all ${goals[metricKey].mode === m ? 'bg-white dark:bg-slate-800 text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  {m === 'fixo' ? 'FIXO' : m === 'diario' ? 'DIA' : 'MÊS'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <h4 className="text-sm font-bold text-slate-700 dark:text-white">{title}</h4>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">Valor Alvo (FIXO)</label>
-          <GoalInput
-            value={goals[metricKey].value}
-            onChange={(val) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: val } })}
-          />
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">
+              VALOR ALVO ({goals[metricKey].mode.toUpperCase()})
+            </label>
+            <GoalInput
+              value={goals[metricKey].value}
+              onChange={(val) => setGoals({ ...goals, [metricKey]: { ...goals[metricKey], value: val } })}
+            />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -418,18 +455,18 @@ const App: React.FC = () => {
           } catch (e) { }
 
           setGoals({
-            amountSpent: { value: latest.Orçamento || 0, mode: 'fixed' },
-            leads: { value: latest.Leads || 0, mode: 'fixed' },
-            cpl: { value: latest.CPL || 0, mode: 'fixed' },
-            ctr: { value: latest.CTR || 0, mode: 'fixed' },
-            cpm: { value: latest.CPM || 0, mode: 'fixed' },
-            frequency: { value: latest.Frequência || 0, mode: 'fixed' },
-            quantity: { value: latest.Quantidade || 0, mode: 'fixed' },
-            mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'fixed' },
-            atendimento: { value: latest.Atendimento || 0, mode: 'fixed' },
-            reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: 'fixed' },
-            reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: 'fixed' },
-            vendas: { value: latest.Vendas || 0, mode: 'fixed' }
+            amountSpent: { value: latest.Orçamento || 0, mode: savedModes.amountSpent || 'fixo' },
+            leads: { value: latest.Leads || 0, mode: savedModes.leads || 'fixo' },
+            cpl: { value: latest.CPL || 0, mode: savedModes.cpl || 'fixo' },
+            ctr: { value: latest.CTR || 0, mode: savedModes.ctr || 'fixo' },
+            cpm: { value: latest.CPM || 0, mode: savedModes.cpm || 'fixo' },
+            frequency: { value: latest.Frequência || 0, mode: savedModes.frequency || 'fixo' },
+            quantity: { value: latest.Quantidade || 0, mode: savedModes.quantity || 'fixo' },
+            mensagensEnviadas: { value: latest.Mensagens_Enviadas || 0, mode: 'fixo' },
+            atendimento: { value: latest.Atendimento || 0, mode: 'fixo' },
+            reuniaoMarcada: { value: latest.Reunioes_Marcadas || latest.Reuniao_Marcada || 0, mode: 'fixo' },
+            reuniaoRealizada: { value: latest.Reunioes_Realizadas || latest.Reuniao_Realizada || 0, mode: 'fixo' },
+            vendas: { value: latest.Vendas || 0, mode: 'fixo' }
           });
         }
       } else if (error) {
@@ -553,24 +590,10 @@ const App: React.FC = () => {
         // Apply date filter to EVERYTHING (except static project info)
         if (startDate || endDate) {
           const rowDateRaw = row.Date || row.Day || row.dia || row.data || row.created_at;
-          if (rowDateRaw) {
-            // Normalize date string (sometimes CRM dates are DD/MM/YYYY)
-            let dateStr = String(rowDateRaw);
-            if (dateStr.includes('/') && dateStr.split('/').length === 3) {
-              const [day, month, year] = dateStr.split('/');
-              dateStr = `${year}-${month}-${day}`;
-            }
-            const rowDate = new Date(dateStr);
-            if (!isNaN(rowDate.getTime())) {
-              if (startDate) {
-                const start = new Date(startDate + "T00:00:00");
-                if (rowDate < start) return false;
-              }
-              if (endDate) {
-                const end = new Date(endDate + "T23:59:59");
-                if (rowDate > end) return false;
-              }
-            }
+          const rowDateNorm = normalizeDateStr(rowDateRaw);
+          if (rowDateNorm) {
+            if (startDate && rowDateNorm < startDate) return false;
+            if (endDate && rowDateNorm > endDate) return false;
           }
         }
         return true;
@@ -598,18 +621,18 @@ const App: React.FC = () => {
         } else {
           // Reset local state
           const resetGoals: DashboardGoals = {
-            amountSpent: { value: 0, mode: 'fixed' },
-            leads: { value: 0, mode: 'fixed' },
-            cpl: { value: 0, mode: 'fixed' },
-            ctr: { value: 0, mode: 'fixed' },
-            cpm: { value: 0, mode: 'fixed' },
-            frequency: { value: 0, mode: 'fixed' },
-            quantity: { value: 0, mode: 'fixed' },
-            mensagensEnviadas: { value: 0, mode: 'fixed' },
-            atendimento: { value: 0, mode: 'fixed' },
-            reuniaoMarcada: { value: 0, mode: 'fixed' },
-            reuniaoRealizada: { value: 0, mode: 'fixed' },
-            vendas: { value: 0, mode: 'fixed' }
+            amountSpent: { value: 0, mode: 'fixo' },
+            leads: { value: 0, mode: 'fixo' },
+            cpl: { value: 0, mode: 'fixo' },
+            ctr: { value: 0, mode: 'fixo' },
+            cpm: { value: 0, mode: 'fixo' },
+            frequency: { value: 0, mode: 'fixo' },
+            quantity: { value: 0, mode: 'fixo' },
+            mensagensEnviadas: { value: 0, mode: 'fixo' },
+            atendimento: { value: 0, mode: 'fixo' },
+            reuniaoMarcada: { value: 0, mode: 'fixo' },
+            reuniaoRealizada: { value: 0, mode: 'fixo' },
+            vendas: { value: 0, mode: 'fixo' }
           };
           setGoals(resetGoals);
           localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
@@ -621,18 +644,18 @@ const App: React.FC = () => {
     } else {
       // For local-only users
       const resetGoals: DashboardGoals = {
-        amountSpent: { value: 0, mode: 'fixed' },
-        leads: { value: 0, mode: 'fixed' },
-        cpl: { value: 0, mode: 'fixed' },
-        ctr: { value: 0, mode: 'fixed' },
-        cpm: { value: 0, mode: 'fixed' },
-        frequency: { value: 0, mode: 'fixed' },
-        quantity: { value: 0, mode: 'fixed' },
-        mensagensEnviadas: { value: 0, mode: 'fixed' },
-        atendimento: { value: 0, mode: 'fixed' },
-        reuniaoMarcada: { value: 0, mode: 'fixed' },
-        reuniaoRealizada: { value: 0, mode: 'fixed' },
-        vendas: { value: 0, mode: 'fixed' }
+        amountSpent: { value: 0, mode: 'fixo' },
+        leads: { value: 0, mode: 'fixo' },
+        cpl: { value: 0, mode: 'fixo' },
+        ctr: { value: 0, mode: 'fixo' },
+        cpm: { value: 0, mode: 'fixo' },
+        frequency: { value: 0, mode: 'fixo' },
+        quantity: { value: 0, mode: 'fixo' },
+        mensagensEnviadas: { value: 0, mode: 'fixo' },
+        atendimento: { value: 0, mode: 'fixo' },
+        reuniaoMarcada: { value: 0, mode: 'fixo' },
+        reuniaoRealizada: { value: 0, mode: 'fixo' },
+        vendas: { value: 0, mode: 'fixo' }
       };
       setGoals(resetGoals);
       localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
@@ -817,18 +840,18 @@ const App: React.FC = () => {
     } catch (e) { }
 
     const newGoals: DashboardGoals = {
-      amountSpent: { value: row.Orçamento || 0, mode: 'fixed' },
-      leads: { value: row.Leads || 0, mode: 'fixed' },
-      cpl: { value: row.CPL || 0, mode: 'fixed' },
-      ctr: { value: row.CTR || 0, mode: 'fixed' },
-      cpm: { value: row.CPM || 0, mode: 'fixed' },
-      frequency: { value: row.Frequência || 0, mode: 'fixed' },
-      quantity: { value: row.Quantidade || 0, mode: 'fixed' },
-      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: 'fixed' },
-      atendimento: { value: row.Atendimento || 0, mode: 'fixed' },
-      reuniaoMarcada: { value: row.Reunioes_Marcadas || row.Reuniao_Marcada || 0, mode: 'fixed' },
-      reuniaoRealizada: { value: row.Reunioes_Realizadas || row.Reuniao_Realizada || 0, mode: 'fixed' },
-      vendas: { value: row.Vendas || 0, mode: 'fixed' }
+      amountSpent: { value: row.Orçamento || 0, mode: savedModes.amountSpent || 'fixo' },
+      leads: { value: row.Leads || 0, mode: savedModes.leads || 'fixo' },
+      cpl: { value: row.CPL || 0, mode: savedModes.cpl || 'fixo' },
+      ctr: { value: row.CTR || 0, mode: savedModes.ctr || 'fixo' },
+      cpm: { value: row.CPM || 0, mode: savedModes.cpm || 'fixo' },
+      frequency: { value: row.Frequência || 0, mode: savedModes.frequency || 'fixo' },
+      quantity: { value: row.Quantidade || 0, mode: savedModes.quantity || 'fixo' },
+      mensagensEnviadas: { value: row.Mensagens_Enviadas || 0, mode: 'fixo' },
+      atendimento: { value: row.Atendimento || 0, mode: 'fixo' },
+      reuniaoMarcada: { value: row.Reunioes_Marcadas || row.Reuniao_Marcada || 0, mode: 'fixo' },
+      reuniaoRealizada: { value: row.Reunioes_Realizadas || row.Reuniao_Realizada || 0, mode: 'fixo' },
+      vendas: { value: row.Vendas || 0, mode: 'fixo' }
     };
     setGoals(newGoals);
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(newGoals));
@@ -859,7 +882,22 @@ const App: React.FC = () => {
   };
 
   const getScaledValue = (metric: { value: number; mode: GoalMode }) => {
-    // Sempre retorna o valor fixo, sem escalonamento
+    if (metric.mode === 'fixo') return metric.value;
+
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date();
+    // Use UTC to calculate diff to avoid DST shifts
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    if (metric.mode === 'diario') {
+      return metric.value * diffDays;
+    }
+
+    if (metric.mode === 'mensal') {
+      return (metric.value / 30) * diffDays;
+    }
+
     return metric.value;
   };
 
@@ -881,14 +919,18 @@ const App: React.FC = () => {
   const calculateStatus = (actual: number, target: number, type: 'higher-better' | 'lower-better', mode?: GoalMode): KPIStatus => {
     if (target === 0) return undefined;
 
+    const isDynamic = mode === 'diario' || mode === 'mensal';
+
     if (type === 'higher-better') {
       // Quanto MAIOR melhor (Leads, Vendas, CTR)
       if (actual >= target) return 'EXCELENTE';
+      if (isDynamic) return 'OTIMIZAR MÉDIA';
       if (actual >= target * 0.9) return 'MÉDIA';
       return 'OTIMIZAR';
     } else {
       // Quanto MENOR melhor (CPL, CPM, Investimento)
       if (actual <= target) return 'EXCELENTE';
+      if (isDynamic) return 'OTIMIZAR MÉDIA';
       if (actual <= target * 1.1) return 'MÉDIA';
       return 'OTIMIZAR';
     }
@@ -1866,7 +1908,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   <KPICard
                     title="Investimento em Mídia"
                     value={FORMATTERS.summarizedCurrency(data.metrics.totalSpend)}
-                    meta={goals.amountSpent.value > 0 ? (goals.amountSpent.mode === 'fixed' ? "META FIXA" : "META MENSAL") : undefined}
+                    meta={goals.amountSpent.value > 0 ? (goals.amountSpent.mode === 'fixo' ? "META FIXA" : goals.amountSpent.mode === 'diario' ? "META DIÁRIA" : "META MENSAL") : undefined}
                     metaValue={goals.amountSpent.value > 0 ? FORMATTERS.currency(scaledGoals.amountSpent) : undefined}
                     icon={<DollarSign size={16} />}
                     statusTag={statusMap.amountSpent}
@@ -1875,7 +1917,7 @@ ${JSON.stringify(tabData, null, 2)}`
                   <KPICard
                     title="Total de Leads"
                     value={FORMATTERS.number(salesMetricsForAnalysis.totalLeads)}
-                    meta={goals.leads.value > 0 ? (goals.leads.mode === 'fixed' ? "META FIXA" : "META MENSAL") : undefined}
+                    meta={goals.leads.value > 0 ? (goals.leads.mode === 'fixo' ? "META FIXA" : goals.leads.mode === 'diario' ? "META DIÁRIA" : "META MENSAL") : undefined}
                     metaValue={goals.leads.value > 0 ? FORMATTERS.number(scaledGoals.leads) : undefined}
                     icon={<RefreshCw size={16} />}
                     statusTag={statusMap.leads}
