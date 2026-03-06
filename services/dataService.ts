@@ -283,6 +283,20 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     return rowDateNorm === todayStr;
   };
 
+  // No topo do processamento de leads, vamos criar um mapa para evitar duplicatas reais
+  const uniqueLeadsMap = new Map<string, ClientLead>();
+
+  const addUniqueLead = (lead: ClientLead, row: any) => {
+    // Chave única: ID Negocio (se existir) ou Nome + Etapa + Data
+    const idNeg = String(findValue(row, ["ID negocio", "id_negocio"]) || "").trim();
+    const leadKey = idNeg ? `id-${idNeg}-${lead.stage}` : `${lead.name}-${lead.stage}-${lead.date}`;
+
+    // Se já existe, só sobrescreve se for mais 'completo' ou se não tivermos ID
+    if (!uniqueLeadsMap.has(leadKey)) {
+      uniqueLeadsMap.set(leadKey, lead);
+    }
+  };
+
   salesRows.forEach((row, index) => {
     const stageName = String(findValue(row, ["Nome Etapa", "Status", "etapa", "fase"]) || "").trim();
     const stageId = String(findValue(row, ["ID Etapa", "Etapa ID", "id_etapa"]) || "").trim();
@@ -331,7 +345,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     }
 
     if (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline))) {
-      leadsList.push({
+      addUniqueLead({
         id: `lead-${index}-${Math.random().toString(36).substr(2, 9)}`,
         name: String(findValue(row, ["nome", "name"]) || "Lead Sem Nome"),
         email: String(findValue(row, ["email"]) || "---"),
@@ -345,7 +359,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         statusVenda2: statusVendaRaw,
         statusVenda2Raw: String(findValue(row, ["status_venda_2", "Status_Venda_2", "status", "venda_status"]) || statusVendaRaw),
         value: parseNumeric(findValue(row, ["valor"]))
-      });
+      }, row);
     }
   });
 
@@ -355,15 +369,10 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const sStatusNorm = normalizeStr(sStatusClean);
     const sVendidoCol = normalizeStr(String(findValue(sRow, ["vendido", "Vendido", "venda_concluida"]) || ''));
 
-    // É venda se: Status diz Ganho/Vendido OU se tem "Sim" nas colunas de venda
     const isActuallyWon = sStatusNorm.includes("ganho") || sStatusNorm.includes("vendido") || sVendidoCol === "sim";
     const isPerdido = sStatusNorm.includes("perdido") && !isActuallyWon;
 
     const sName = String(findValue(sRow, ["nome"]) || findValue(sRow, ["titulo do negocio"]) || "Lead Sem Nome");
-    if (sName.toLowerCase().includes("eberte") || sName.toLowerCase().includes("ebert")) {
-      console.log('💎 Debug Ebert Row:', { sName, isActuallyWon, isPerdido, sStatusRaw });
-    }
-
     if (!isActuallyWon && !isPerdido) return;
 
     const entryDate = String(findValue(sRow, ["data", "created_at", "date"]) || "---");
@@ -382,10 +391,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     }
 
     if (isWithinDate && (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline)))) {
-      if (sName.toLowerCase().includes("ebert")) {
-        console.log('💎 PUSHING Ebert to leadsList:', { finalPipeline, statusVenda2: effectiveStatus, date: entryDate });
-      }
-      leadsList.push({
+      addUniqueLead({
         id: `status-${sIdx}-${sStatusNorm.substring(0, 3)}`,
         name: String(findValue(sRow, ["nome"]) || findValue(sRow, ["titulo do negocio"]) || "Lead Sem Nome"),
         email: String(findValue(sRow, ["email"]) || "---"),
@@ -399,7 +405,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         statusVenda2: effectiveStatus,
         statusVenda2Raw: String(findValue(sRow, ["status_venda_2", "Status_Venda_2", "status", "venda_status"]) || effectiveStatus),
         value: parseNumeric(findValue(sRow, ["valor"]))
-      });
+      }, sRow);
     }
   });
 
@@ -407,21 +413,18 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   valoresRows.forEach((vRow, vIdx) => {
     const finalPipeline = "High Contorno";
 
-    // Gerar data aleatória entre fevereiro e outubro de 2025 para High Contorno
-    // Isso garante que elas apareçam quando o filtro de datas estiver correto
     const start = new Date("2025-02-01").getTime();
     const end = new Date("2025-10-31").getTime();
     const randomDate = new Date(start + Math.random() * (end - start));
     const randomDateStr = randomDate.toISOString().split('T')[0];
 
-    // Date filtering for values table
     let isWithinDate = true;
     if (filterStartDate && randomDate < new Date(filterStartDate + "T00:00:00")) isWithinDate = false;
     if (filterEndDate && randomDate > new Date(filterEndDate + "T23:59:59")) isWithinDate = false;
 
     if (isWithinDate && (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline)))) {
       const vNome = findValue(vRow, ["nome", "name"]) || "Lead Sem Nome";
-      leadsList.push({
+      addUniqueLead({
         id: `valor-${vIdx}`,
         name: String(vNome),
         email: "---",
@@ -435,9 +438,13 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         statusVenda2: "ganho",
         statusVenda2Raw: "Vendido (Valores)",
         value: parseNumeric(findValue(vRow, ["valor"]))
-      });
+      }, vRow);
     }
   });
+
+  // Finalizar a lista de leads a partir do mapa único
+  leadsList = Array.from(uniqueLeadsMap.values());
+
 
   console.log('📊 leadsList FINAL Count:', leadsList.length);
   console.log('🏆 Vendas (ID 14) Count:', leadsList.filter(l => l.stageId === "14").length);
