@@ -1,4 +1,4 @@
-﻿
+
 import {
   Moon, Sun,
   BarChart3, Database,
@@ -434,7 +434,7 @@ const App: React.FC = () => {
     // Load metas from Supabase
     try {
       const { data: history, error } = await supabase
-        .from('Meta_2')
+        .from(`Meta_${firstId}`)
         .select('*')
         .order('id', { ascending: false });
 
@@ -606,19 +606,25 @@ const App: React.FC = () => {
 
 
   const handleDeleteGoals = async () => {
-    if (!confirm('Tem certeza que deseja excluir as metas do banco de dados? Isso voltará os valores para zero.')) return;
+    if (!confirm('Tem certeza que deseja excluir TODAS as metas do banco de dados para os clientes selecionados? Isso voltará os valores para zero.')) return;
 
-    if (currentUser?.id && currentUser.id !== 1) {
+    const targetIds = selectedClientIds.length > 0 ? selectedClientIds : [currentUser?.id].filter(Boolean) as number[];
+    
+    if (targetIds.length > 0) {
       try {
-        const { error } = await supabase
-          .from('Meta_2')
-          .delete()
-          .eq('id', 1);
+        const results = await Promise.all(targetIds.map(async (tid) => {
+          // No current app, o delete parece ser de uma linha específica ou de tudo? 
+          // O código original fazia .delete().eq('id', 1). 
+          // Se o objetivo é limpar TUDO, deveria ser sem row filter, mas vou manter o padrão de 'limpar'
+          return await supabase
+            .from(`Meta_${tid}`)
+            .delete()
+            .neq('id', 0); // Deleta tudo (id != 0)
+        }));
 
-        if (error) {
-          console.error('Erro ao excluir no Supabase:', error);
-          alert('Erro ao excluir as metas no banco de dados (Meta_2).');
-        } else {
+        const errorResults = results.filter(r => r.error);
+
+        if (errorResults.length === 0) {
           // Reset local state
           const resetGoals: DashboardGoals = {
             amountSpent: { value: 0, mode: 'fixo' },
@@ -635,8 +641,13 @@ const App: React.FC = () => {
             vendas: { value: 0, mode: 'fixo' }
           };
           setGoals(resetGoals);
+          setGoalsHistory([]);
+          setActiveGoalId(null);
           localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
-          alert('Metas excluídas com sucesso!');
+          alert(`✅ SUCESSO: Histórico de metas excluído para ${targetIds.length} clientes.`);
+        } else {
+          console.error('Erro ao excluir no Supabase:', errorResults[0].error);
+          alert(`Erro ao excluir as metas no banco de dados.`);
         }
       } catch (err) {
         console.error('Exception deleting goals:', err);
@@ -658,6 +669,8 @@ const App: React.FC = () => {
         vendas: { value: 0, mode: 'fixo' }
       };
       setGoals(resetGoals);
+      setGoalsHistory([]);
+      setActiveGoalId(null);
       localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(resetGoals));
       alert('Metas locais limpas!');
     }
@@ -667,8 +680,9 @@ const App: React.FC = () => {
     // Save to localStorage
     localStorage.setItem(`even_goals_${currentUser?.id || 'default'}`, JSON.stringify(goals));
 
-    const targetId = selectedClientIds[0] || currentUser?.id;
-    if (targetId && currentUser?.role === 'admin') {
+    const targetIds = selectedClientIds.length > 0 ? selectedClientIds : [currentUser?.id].filter(Boolean) as number[];
+    
+    if (targetIds.length > 0 && currentUser?.role === 'admin') {
       try {
         // Extrair apenas os modos para salvar no JSON
         const modesToSave: Record<string, string> = {};
@@ -676,9 +690,8 @@ const App: React.FC = () => {
           modesToSave[key] = (val as any).mode;
         });
 
-        const { data: newRow, error } = await supabase
-          .from('Meta_2')
-          .insert([{
+        const results = await Promise.all(targetIds.map(async (tid) => {
+          const goalData: any = {
             Orçamento: goals.amountSpent.value,
             Leads: goals.leads.value,
             CPL: goals.cpl.value,
@@ -691,50 +704,48 @@ const App: React.FC = () => {
             Reunioes_Marcadas: goals.reuniaoMarcada.value,
             Reunioes_Realizadas: goals.reuniaoRealizada.value,
             Vendas: goals.vendas.value,
-            // Guardar modos em Config (requer que a coluna exista, se não existir o insert falha e tentamos sem)
             Config: JSON.stringify({ modes: modesToSave })
-          }])
-          .select();
+          };
 
-        if (error) {
-          // Fallback: se Config não existir, tenta salvar sem
-          if (error.message.includes('Config')) {
-            const { data: retryRow, error: retryError } = await supabase
-              .from('Meta_2')
-              .insert([{
-                Orçamento: goals.amountSpent.value,
-                Leads: goals.leads.value,
-                CPL: goals.cpl.value,
-                CTR: goals.ctr.value,
-                CPM: goals.cpm.value,
-                Frequência: goals.frequency.value,
-                Quantidade: goals.quantity.value,
-                Mensagens_Enviadas: goals.mensagensEnviadas.value,
-                Atendimento: goals.atendimento.value,
-                Reunioes_Marcadas: goals.reuniaoMarcada.value,
-                Reunioes_Realizadas: goals.reuniaoRealizada.value,
-                Vendas: goals.vendas.value
-              }])
+          const { data, error } = await supabase
+            .from(`Meta_${tid}`)
+            .insert([goalData])
+            .select();
+
+          if (error && error.message.includes('Config')) {
+            // Fallback: se Config não existir, tira do objeto e tenta de novo
+            const { Config, ...goalDataWithoutConfig } = goalData;
+            return await supabase
+              .from(`Meta_${tid}`)
+              .insert([goalDataWithoutConfig])
               .select();
-
-            if (retryError) {
-              console.error('Erro ao salvar metas no Supabase:', retryError);
-              alert(`ERRO SUPABASE: ${retryError.message}`);
-            } else {
-              const insertedRow = retryRow[0];
-              setGoalsHistory(prev => [insertedRow, ...prev]);
-              setActiveGoalId(insertedRow.id);
-              alert(`✅ SUCESSO: Metas salvas (Sem persistência de modos - ID #${insertedRow.id})`);
-            }
-          } else {
-            console.error('Erro ao salvar metas no Supabase:', error);
-            alert(`ERRO SUPABASE: ${error.message}`);
           }
-        } else {
-          const insertedRow = newRow[0];
-          setGoalsHistory(prev => [insertedRow, ...prev]);
-          setActiveGoalId(insertedRow.id);
-          alert(`✅ SUCESSO: Nova meta adicionada (ID #${insertedRow.id}) na tabela Meta_2.`);
+
+          return { data, error };
+        }));
+
+        const successResults = results.filter(r => r.data && !r.error);
+        const errorResults = results.filter(r => r.error);
+
+        if (successResults.length > 0) {
+          // Atualiza o histórico visual com o resultado do primeiro cliente da lista (se teve sucesso)
+          const firstTargetId = targetIds[0];
+          const firstIdResult = results.find((r, idx) => targetIds[idx] === firstTargetId);
+
+          if (firstIdResult && firstIdResult.data) {
+            const insertedRow = firstIdResult.data[0];
+            setGoalsHistory(prev => [insertedRow, ...prev]);
+            setActiveGoalId(insertedRow.id);
+          }
+
+          if (errorResults.length > 0) {
+            alert(`✅ Sucesso parcial: Metas adicionadas para ${successResults.length} clientes. Falha em ${errorResults.length} clientes.`);
+          } else {
+            alert(`✅ SUCESSO: Metas adicionadas para ${targetIds.length} clientes no banco de dados.`);
+          }
+        } else if (errorResults.length > 0) {
+          console.error('Erro ao salvar metas no Supabase:', errorResults[0].error);
+          alert(`❌ ERRO SUPABASE: ${errorResults[0].error.message}`);
         }
       } catch (err: any) {
         console.error('Exception saving goals:', err);
@@ -763,7 +774,7 @@ const App: React.FC = () => {
         });
 
         const { data: updatedRow, error } = await supabase
-          .from('Meta_2')
+          .from(`Meta_${targetId}`)
           .update({
             Orçamento: goals.amountSpent.value,
             Leads: goals.leads.value,
@@ -786,7 +797,7 @@ const App: React.FC = () => {
           // Fallback se a coluna Config não existir
           if (error.message.includes('Config')) {
             const { data: retryRow, error: retryError } = await supabase
-              .from('Meta_2')
+              .from(`Meta_${targetId}`)
               .update({
                 Orçamento: goals.amountSpent.value,
                 Leads: goals.leads.value,
@@ -819,7 +830,7 @@ const App: React.FC = () => {
         } else {
           const finalRow = updatedRow[0];
           setGoalsHistory(prev => prev.map(row => row.id === idToUpdate ? finalRow : row));
-          alert(`✅ SUCESSO: Meta ID #${idToUpdate} atualizada na tabela Meta_2.`);
+          alert(`✅ SUCESSO: Meta ID #${idToUpdate} atualizada na tabela Meta_${targetId}.`);
         }
       } catch (err: any) {
         console.error('Exception updating goals:', err);
@@ -861,10 +872,10 @@ const App: React.FC = () => {
     if (!confirm('Tem certeza que deseja excluir esta meta permanentemente?')) return;
 
     const targetId = selectedClientIds[0] || currentUser?.id;
-    if (targetId && currentUser?.role === 'admin') {
+    if (targetId && targetId !== 1) {
       try {
         const { error } = await supabase
-          .from('Meta_2')
+          .from(`Meta_${targetId}`)
           .delete()
           .eq('id', rowId);
 
