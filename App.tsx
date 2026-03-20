@@ -998,7 +998,7 @@ const App: React.FC = () => {
       const sVendaNorm = normalizeText(lead.statusVenda2);
       const stageNormLocal = normalizeText(lead.stage);
       const isLost = sVendaNorm.includes('perd') || stageNormLocal.includes('perd');
-      const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || lead.stage === 'Vendas Concluidas';
+      const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || stageNormLocal.includes('vendaconcluida');
       const isActive = !isLost && !isWon;
 
       let matchesVendaStatus = true;
@@ -1023,7 +1023,7 @@ const App: React.FC = () => {
     const ganhoLeads = leadsForAnalysis.filter(l => {
       const sVendaNorm = normalizeText(l.statusVenda2);
       const stageNormLocal = normalizeText(l.stage);
-      return sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || l.stage === 'Vendas Concluidas';
+      return sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || stageNormLocal.includes('vendaconcluida');
     });
 
     const totalRevenue = ganhoLeads.reduce((sum, l) => sum + (l.value || 0), 0);
@@ -1066,6 +1066,10 @@ const App: React.FC = () => {
       if (stageId === "10") return 6;
 
       const normalized = normalizeStr(stageName);
+
+      // Caso especial: "Venda Concluída" (singular, id_etapa tipicamente 38) → índice 10
+      // "vendaconcluida" NÃO é substring de "vendasconcluidas" (substring check padrão falha)
+      if (normalized.includes("vendaconcluida")) return 10;
 
       // Alias check for meetings
       if (normalized.includes("reuniaomarcada") || (normalized.includes("reuniao") && normalized.includes("marcad"))) {
@@ -1283,12 +1287,18 @@ const App: React.FC = () => {
         phoneNorm.includes(searchNorm) ||
         businessNorm.includes(searchNorm);
 
-      const matchesStage = selectedStage === 'all' || lead.stage === selectedStage;
+      // Normaliza a comparação de etapa para aceitar variações de grafia (acento, singular/plural)
+      const leadStageNorm = normalizeText(lead.stage);
+      const selectedStageNorm = normalizeText(selectedStage);
+      const matchesStage = selectedStage === 'all' ||
+        leadStageNorm === selectedStageNorm ||
+        // Aceita "Venda Concluída" (singular) ao selecionar "Vendas Concluídas" (plural) e vice-versa
+        (selectedStageNorm.includes('vendaconcluida') && leadStageNorm.includes('vendaconcluida'));
       const matchesTags = selectedTags.length === 0 || (lead.tags && lead.tags.some(tag => selectedTags.includes(tag)));
       const sVendaNorm = normalizeText(lead.statusVenda2);
       const stageNormLocal = normalizeText(lead.stage);
       const isLost = sVendaNorm.includes('perd') || stageNormLocal.includes('perd');
-      const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || lead.stage === 'Vendas Concluidas';
+      const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || stageNormLocal.includes('vendaconcluida');
 
       const isActive = !isLost && !isWon;
 
@@ -2634,9 +2644,14 @@ ${JSON.stringify(tabData, null, 2)}`
                           const leadStageNorm = normalizeStr(lead.stage);
                           const stageNorm = normalizeStr(stage.stage);
                           // Check if the normalized strings match or if one contains the other
-                          return leadStageNorm === stageNorm ||
-                            leadStageNorm.includes(stageNorm) ||
-                            stageNorm.includes(leadStageNorm);
+                          if (leadStageNorm === stageNorm) return true;
+                          if (leadStageNorm.includes(stageNorm)) return true;
+                          if (stageNorm.includes(leadStageNorm)) return true;
+                          // Caso especial: "Venda Concluída" (singular) bate com coluna "Vendas Concluidas" (plural)
+                          // "vendaconcluida" NÃO é substring de "vendasconcluidas" pois "vendas" ≠ "venda"
+                          if (stageNorm.includes('vendasconcluidas') && leadStageNorm.includes('vendaconcluida')) return true;
+                          if (leadStageNorm.includes('vendasconcluidas') && stageNorm.includes('vendaconcluida')) return true;
+                          return false;
                         });
 
                         // DEBUG Ebert in Kanban
@@ -2670,7 +2685,7 @@ ${JSON.stringify(tabData, null, 2)}`
                           const sVendaNorm = normalizeText(lead.statusVenda2);
                           const stageNormLocal = normalizeText(lead.stage);
                           const isLost = sVendaNorm.includes('perd') || stageNormLocal.includes('perd');
-                          const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || lead.stage === 'Vendas Concluidas';
+                          const isWon = sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || stageNormLocal.includes('vendaconcluida');
                           const isActive = !isLost && !isWon;
 
                           // Apply venda status filter

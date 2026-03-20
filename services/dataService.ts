@@ -1,4 +1,4 @@
-﻿
+
 import { DashboardData, FunnelStage, ClientLead, CreativePlayback } from '../types';
 import { supabase } from './supabase';
 
@@ -104,6 +104,16 @@ const PREFERRED_ORDER = [
   "proposta enviada",
   "vendas concluidas"
 ];
+
+// Helper: verifica se a etapa de um lead corresponde a um termo do PREFERRED_ORDER.
+// Trata "Venda Concluída" (singular) como equivalente a "Vendas Concluídas" (plural).
+const stageMatchesTerm = (stageNorm: string, term: string): boolean => {
+  const termNorm = normalizeStr(term);
+  if (stageNorm.includes(termNorm)) return true;
+  // Aceita singular: "vendaconcluida" bate com o termo "vendasconcluidas"
+  if (termNorm === "vendasconcluidas" && stageNorm.includes("vendaconcluida")) return true;
+  return false;
+};
 
 const generateColor = (name: string): string => {
   const n = normalizeStr(name);
@@ -307,6 +317,12 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     if (statusInfo) statusInfo.handled = true;
 
     const statusVendaRaw = (() => {
+      const stageNorm = normalizeStr(stageName);
+
+      // ✅ Se a etapa do CRM é "Venda Concluída" ou "Vendas Concluídas" (singular ou plural),
+      // considera automaticamente como ganho e soma o valor ao SITRE.
+      if (stageNorm.includes("vendaconcluida") || stageNorm.includes("vendasconcluidas")) return "ganho";
+
       const updatedValue = findValue(row, ["atualizado?", "atualizado", "Atualizado", "atualizacao", "atualização"]);
       const vendidoCol = findValue(row, ["vendido", "Vendido", "venda_concluida", "concluido"]);
       const uStr = updatedValue ? String(updatedValue).trim() : "";
@@ -457,7 +473,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       countVendasID14 += 1;
     }
     const stageNorm = normalizeStr(l.stage);
-    let matchedStage = PREFERRED_ORDER.find(term => stageNorm.includes(normalizeStr(term)));
+    let matchedStage = PREFERRED_ORDER.find(term => stageMatchesTerm(stageNorm, term));
     if (matchedStage) {
       const officialName = toTitleCase(matchedStage);
       if (l.statusVenda2 !== "perdido" || matchedStage.includes("concluid")) {
@@ -469,7 +485,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   const funnelStages: FunnelStage[] = PREFERRED_ORDER.map(term => {
     const officialName = toTitleCase(term);
     const stageLeads = leadsList.filter(lead => {
-      const match = normalizeStr(lead.stage).includes(normalizeStr(term));
+      const match = stageMatchesTerm(normalizeStr(lead.stage), term);
       return match && (lead.statusVenda2 !== "perdido" || term.includes("concluid"));
     });
     return {

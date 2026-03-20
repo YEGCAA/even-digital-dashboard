@@ -50,26 +50,26 @@ export const FORMATTERS = {
 
   summarized: (value: number) => {
     if (value >= 1_000_000) {
-      // Arredonda para o mais próximo em 2 casas decimais
-      const rounded = Math.round((value / 1_000_000) * 100) / 100;
-      return rounded.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' Mi';
+      // Trunca em 2 casas decimais sem arredondar para cima
+      const truncated = Math.floor((value / 1_000_000) * 100) / 100;
+      return truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' Mi';
     }
     if (value >= 1_000) {
-      // Arredonda para o mais próximo em 1 casa decimal
-      const rounded = Math.round((value / 1_000) * 10) / 10;
-      return rounded.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' mil';
+      // Trunca em 1 casa decimal
+      const truncated = Math.floor((value / 1_000) * 10) / 10;
+      return truncated.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' mil';
     }
     return value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   },
 
   summarizedCurrency: (value: number) => {
     if (value >= 1_000_000) {
-      const rounded = Math.round((value / 1_000_000) * 100) / 100;
-      return 'R$ ' + rounded.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' Mi';
+      const truncated = Math.floor((value / 1_000_000) * 100) / 100;
+      return 'R$ ' + truncated.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' Mi';
     }
     if (value >= 1_000) {
-      const rounded = Math.round((value / 1_000) * 10) / 10;
-      return 'R$ ' + rounded.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' mil';
+      const truncated = Math.floor((value / 1_000) * 10) / 10;
+      return 'R$ ' + truncated.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' mil';
     }
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
