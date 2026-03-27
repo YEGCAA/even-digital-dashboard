@@ -277,7 +277,18 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     }
   });
 
-  dadosRows.forEach(row => {
+  // Filter dadosRows by pipeline when a pipeline is selected
+  const activeDadosRows = (() => {
+    if (filterPipelines.length === 0) return dadosRows; // no filter → use all
+    // Find row whose "nome do empreendimento" matches the selected pipeline
+    const matched = dadosRows.filter(row => {
+      const nomeProjeto = String(findValue(row, ["nome do empreendimento", "projeto"]) || "");
+      return filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(nomeProjeto));
+    });
+    return matched.length > 0 ? matched : dadosRows; // fallback to all if nothing matched
+  })();
+
+  activeDadosRows.forEach(row => {
     totalUnits += parseNumeric(findValue(row, ["unidades", "units"]));
     totalVGV += parseNumeric(findValue(row, ["VGV", "vgv", "valor vgv"]));
     projectName = String(findValue(row, ["nome do empreendimento", "projeto"]) || projectName);

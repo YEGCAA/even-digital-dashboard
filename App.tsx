@@ -383,6 +383,21 @@ const App: React.FC = () => {
   const [aiReport, setAiReport] = useState<string>('');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
+  const defaultGoalsReset: DashboardGoals = {
+    amountSpent: { value: 0, mode: 'fixo' },
+    leads: { value: 0, mode: 'fixo' },
+    cpl: { value: 0, mode: 'fixo' },
+    ctr: { value: 0, mode: 'fixo' },
+    cpm: { value: 0, mode: 'fixo' },
+    frequency: { value: 0, mode: 'fixo' },
+    quantity: { value: 0, mode: 'fixo' },
+    mensagensEnviadas: { value: 0, mode: 'fixo' },
+    atendimento: { value: 0, mode: 'fixo' },
+    reuniaoMarcada: { value: 0, mode: 'fixo' },
+    reuniaoRealizada: { value: 0, mode: 'fixo' },
+    vendas: { value: 0, mode: 'fixo' }
+  };
+
   const loadData = async (silent = false, clientIds?: number[]) => {
     if (!currentUser) return;
 
@@ -392,6 +407,9 @@ const App: React.FC = () => {
     if (currentUser.role === 'admin' && idsToFetch.length === 0 && !clientIds) {
       if (!silent) setLoading(LoadingState.LOADING);
       setBaseData(processSupabaseData([], [], {}));
+      setGoals(defaultGoalsReset);
+      setGoalsHistory([]);
+      setActiveGoalId(null);
       setLoading(LoadingState.SUCCESS);
       return;
     }
@@ -413,8 +431,19 @@ const App: React.FC = () => {
     if (tablesToFetch.length === 0 && currentUser.role === 'admin') {
       if (!silent) setLoading(LoadingState.LOADING);
       setBaseData(processSupabaseData([], [], {}));
+      setGoals(defaultGoalsReset);
+      setGoalsHistory([]);
+      setActiveGoalId(null);
       setLoading(LoadingState.SUCCESS);
       return;
+    }
+
+    // ✅ Reset stale data IMMEDIATELY before any async call to avoid showing previous client's data
+    if (!silent) {
+      setBaseData(null);
+      setGoals(defaultGoalsReset);
+      setGoalsHistory([]);
+      setActiveGoalId(null);
     }
 
     if (!silent) setLoading(LoadingState.LOADING);
@@ -3178,6 +3207,15 @@ ${JSON.stringify(tabData, null, 2)}`
                     <div className="mt-8 flex justify-end">
                       <button
                         onClick={() => {
+                          // ✅ Reset all filters from previous client before loading new one
+                          setSelectedCampaigns([]);
+                          setSelectedAdSets([]);
+                          setSelectedAds([]);
+                          setSelectedPipelines([]);
+                          setSelectedTags([]);
+                          setSelectedStage('all');
+                          setSelectedVendaStatus('Atual');
+                          setSalesSearch('');
                           loadData(false, selectedClientIds);
                           setActiveTab('overview');
                         }}
