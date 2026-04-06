@@ -52,12 +52,19 @@ const normalizeDateStr = (dStr: any) => {
   if (!dStr || dStr === "---") return "";
   let s = String(dStr).trim();
   if (s.includes('T')) s = s.split('T')[0];
-  if (s.includes('/') && s.split('/').length === 3) {
+  
+  if (s.includes('/')) {
     const parts = s.split('/');
-    if (parts[0].length === 4) {
-      s = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    } else {
-      s = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        s = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      } else {
+        s = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    } else if (parts.length === 2) {
+      // DD/MM -> YYYY-MM-DD (assume current year)
+      const year = new Date().getFullYear();
+      s = `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
   }
   return s;
@@ -618,11 +625,18 @@ const App: React.FC = () => {
 
         // Apply date filter to EVERYTHING (except static project info)
         if (startDate || endDate) {
-          const rowDateRaw = row.Date || row.Day || row.dia || row.data || row.created_at;
-          const rowDateNorm = normalizeDateStr(rowDateRaw);
-          if (rowDateNorm) {
-            if (startDate && rowDateNorm < startDate) return false;
-            if (endDate && rowDateNorm > endDate) return false;
+          const dateKeys = ['Date', 'Day', 'dia', 'data', 'created_at', 'atualizado?', 'atualizado', 'Atualizado'];
+          const rowDates = dateKeys.map(k => getRowValue(row, [k])).filter(d => d && d !== "---");
+          
+          if (rowDates.length > 0) {
+            const isAnyDateInRange = rowDates.some(d => {
+              const rowDateNorm = normalizeDateStr(d);
+              if (!rowDateNorm) return false;
+              if (startDate && rowDateNorm < startDate) return false;
+              if (endDate && rowDateNorm > endDate) return false;
+              return true;
+            });
+            if (!isAnyDateInRange) return false;
           }
         }
         return true;

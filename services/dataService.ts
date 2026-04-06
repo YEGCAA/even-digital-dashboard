@@ -48,15 +48,22 @@ const normalizeStr = (s: string) => s.toLowerCase()
   .replace(/[\s_]/g, '');
 
 const normalizeDateStr = (dStr: any) => {
-  if (!dStr || dStr === "---") return "";
+  if (!dStr || dStr === "---" || !dStr) return "";
   let s = String(dStr).trim();
   if (s.includes('T')) s = s.split('T')[0];
-  if (s.includes('/') && s.split('/').length === 3) {
+  
+  if (s.includes('/')) {
     const parts = s.split('/');
-    if (parts[0].length === 4) {
-      s = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    } else {
-      s = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        s = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      } else {
+        s = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    } else if (parts.length === 2) {
+      // DD/MM -> YYYY-MM-DD
+      const year = new Date().getFullYear();
+      s = `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
   }
   return s;
@@ -299,22 +306,35 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     .sort((a, b) => b.p100 - a.p100);
 
   const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
-  const isDateToday = (dStr: string) => {
+  const isDateInRange = (dStr: string) => {
     const rowDateNorm = normalizeDateStr(dStr);
-    return rowDateNorm === todayStr;
+    if (!rowDateNorm) return false;
+    if (filterStartDate && rowDateNorm < filterStartDate) return false;
+    if (filterEndDate && rowDateNorm > filterEndDate) return false;
+    return true;
   };
 
   // No topo do processamento de leads, vamos criar um mapa para evitar duplicatas reais
   const uniqueLeadsMap = new Map<string, ClientLead>();
+  // Rastreia quais chaves já foram definidas pelo Status_venda (têm prioridade)
+  const statusVendaKeys = new Set<string>();
 
-  const addUniqueLead = (lead: ClientLead, row: any) => {
-    // Chave única: ID Negocio (se existir) ou Nome + Etapa + Data
+  const addUniqueLead = (lead: ClientLead, row: any, fromStatusVenda = false) => {
+    // Chave única: apenas ID Negocio (sem incluir stage) para evitar duplicatas
+    // quando o mesmo lead aparece como "Venda Concluída" na Vendas_X
+    // e como "Vendas Concluidas" no Status_venda_X
     const idNeg = String(findValue(row, ["ID negocio", "id_negocio"]) || "").trim();
-    const leadKey = idNeg ? `id-${idNeg}-${lead.stage}` : `${lead.name}-${lead.stage}-${lead.date}`;
+    const leadKey = idNeg ? `id-${idNeg}` : `${lead.name}-${lead.stage}-${lead.date}`;
 
-    // Se já existe, só sobrescreve se for mais 'completo' ou se não tivermos ID
-    if (!uniqueLeadsMap.has(leadKey)) {
+    if (fromStatusVenda) {
+      // Status_venda_X tem prioridade: sempre sobrescreve
       uniqueLeadsMap.set(leadKey, lead);
+      statusVendaKeys.add(leadKey);
+    } else {
+      // Vendas_X: só insere se não houver entrada do Status_venda_X
+      if (!statusVendaKeys.has(leadKey) && !uniqueLeadsMap.has(leadKey)) {
+        uniqueLeadsMap.set(leadKey, lead);
+      }
     }
   };
 
@@ -344,7 +364,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       if (crmStatus.includes("ganho") || crmStatus.includes("vendido") || uNorm.includes("vendido") || uNorm === "sim" || vNorm === "sim") return "ganho";
 
       const createdVal = String(findValue(row, ["data", "created_at", "date", "dia"]) || "");
-      if (isDateToday(uStr) || isDateToday(createdVal)) {
+      if (isDateInRange(uStr) || isDateInRange(createdVal)) {
         if (crmStatus.includes("perdido") || uNorm.includes("perdido")) return "perdido";
         return "atual";
       }
@@ -405,7 +425,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const entryDate = String(findValue(sRow, ["data", "created_at", "date"]) || "---");
 
     let effectiveStatus = isActuallyWon ? "ganho" : "perdido";
-    if (isPerdido && isDateToday(entryDate)) effectiveStatus = "atual";
+    if (isPerdido && isDateInRange(entryDate)) effectiveStatus = "atual";
 
     const pipelineName = String(findValue(sRow, ["Pipeline", "pipeline", "funil"]) || "");
     const finalPipeline = normalizeStr(pipelineName).includes("reserva") ? "Reserva do Sal" : "High Contorno";
@@ -432,7 +452,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         statusVenda2: effectiveStatus,
         statusVenda2Raw: String(findValue(sRow, ["status_venda_2", "Status_Venda_2", "status", "venda_status"]) || effectiveStatus),
         value: parseNumeric(findValue(sRow, ["valor"]))
-      }, sRow);
+      }, sRow, true);
     }
   });
 
