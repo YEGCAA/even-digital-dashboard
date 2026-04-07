@@ -1046,7 +1046,7 @@ const App: React.FC = () => {
 
       let matchesVendaStatus = true;
       if (selectedVendaStatus === 'Atual') {
-        matchesVendaStatus = isActive || isWon;
+        matchesVendaStatus = isActive;
       } else if (selectedVendaStatus === 'Ganho') {
         matchesVendaStatus = isWon;
       } else if (selectedVendaStatus === 'Perdido') {
@@ -1348,7 +1348,7 @@ const App: React.FC = () => {
       // Apply venda status filter
       let matchesVendaStatus = true;
       if (selectedVendaStatus === 'Atual') {
-        matchesVendaStatus = isActive || isWon;
+        matchesVendaStatus = isActive;
       } else if (selectedVendaStatus === 'Ganho') {
         matchesVendaStatus = isWon;
       } else if (selectedVendaStatus === 'Perdido') {

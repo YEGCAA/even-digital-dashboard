@@ -313,6 +313,10 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     if (filterEndDate && rowDateNorm > filterEndDate) return false;
     return true;
   };
+  const isToday = (dStr: string) => {
+    const rowDateNorm = normalizeDateStr(dStr);
+    return rowDateNorm === todayStr;
+  };
 
   // No topo do processamento de leads, vamos criar um mapa para evitar duplicatas reais
   const uniqueLeadsMap = new Map<string, ClientLead>();
@@ -364,7 +368,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       if (crmStatus.includes("ganho") || crmStatus.includes("vendido") || uNorm.includes("vendido") || uNorm === "sim" || vNorm === "sim") return "ganho";
 
       const createdVal = String(findValue(row, ["data", "created_at", "date", "dia"]) || "");
-      if (isDateInRange(uStr) || isDateInRange(createdVal)) {
+      if (isToday(uStr) || isToday(createdVal)) {
         if (crmStatus.includes("perdido") || uNorm.includes("perdido")) return "perdido";
         return "atual";
       }
@@ -425,7 +429,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const entryDate = String(findValue(sRow, ["data", "created_at", "date"]) || "---");
 
     let effectiveStatus = isActuallyWon ? "ganho" : "perdido";
-    if (isPerdido && isDateInRange(entryDate)) effectiveStatus = "atual";
+    if (isPerdido && isToday(entryDate)) effectiveStatus = "atual";
 
     const pipelineName = String(findValue(sRow, ["Pipeline", "pipeline", "funil"]) || "");
     const finalPipeline = normalizeStr(pipelineName).includes("reserva") ? "Reserva do Sal" : "High Contorno";
