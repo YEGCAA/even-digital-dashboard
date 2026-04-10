@@ -119,6 +119,10 @@ const stageMatchesTerm = (stageNorm: string, term: string): boolean => {
   if (stageNorm.includes(termNorm)) return true;
   // Aceita singular: "vendaconcluida" bate com o termo "vendasconcluidas"
   if (termNorm === "vendasconcluidas" && stageNorm.includes("vendaconcluida")) return true;
+  
+  // ✅ Especial para Opus/Vendas_3: "Estágio não mapeado" -> "Entrada do Lead"
+  if (termNorm === "entradadolead" && stageNorm.includes("estagionaomapeado")) return true;
+  
   return false;
 };
 
@@ -180,7 +184,9 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
   const statusRows: any[] = [];
   statusTables.forEach(t => {
-    if (rawDataByTable[t]) statusRows.push(...rawDataByTable[t]);
+    if (rawDataByTable[t]) {
+      rawDataByTable[t].forEach(r => statusRows.push({ ...r, __tableName: t }));
+    }
   });
 
   const dadosTables = fetchedTables.filter(t => t.toLowerCase().includes('dados'));
@@ -192,7 +198,9 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   const valoresTables = fetchedTables.filter(t => t.toLowerCase().includes('valores'));
   const valoresRows: any[] = [];
   valoresTables.forEach(t => {
-    if (rawDataByTable[t]) valoresRows.push(...rawDataByTable[t]);
+    if (rawDataByTable[t]) {
+      rawDataByTable[t].forEach(r => valoresRows.push({ ...r, __tableName: t }));
+    }
   });
 
   console.log('🔍 processSupabaseData DEBUG:', {
@@ -343,6 +351,7 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   };
 
   salesRows.forEach((row, index) => {
+    const tableName = (row as any).__tableName || "";
     const stageName = String(findValue(row, ["Nome Etapa", "Status", "etapa", "fase"]) || "").trim();
     const stageId = String(findValue(row, ["ID Etapa", "Etapa ID", "id_etapa"]) || "").trim();
     const idNegocio = String(findValue(row, ["ID negocio", "id_negocio"]) || "").trim();
@@ -351,11 +360,36 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     const statusInfo = (idNegocio && statusByIdMap[idNegocio]) || (leadNameNorm && statusByNameMap[leadNameNorm]);
     if (statusInfo) statusInfo.handled = true;
 
+    // 1. Determina o Pipeline Primeiro
+    const pipelineId = String(findValue(row, ["id pipeline", "ID Pipeline", "id_funil"]) || "").trim();
+    const pipelineName = String(findValue(row, ["pipeline", "Pipeline", "funil"]) || "").trim();
+    const pNorm = normalizeStr(pipelineName);
+
+    let finalPipeline = "High Contorno";
+    if (tableName.includes("_3") || pNorm.includes("opus")) {
+      finalPipeline = "Opus";
+    } else if (statusInfo && statusInfo.pipeline) {
+      const sPipeNorm = normalizeStr(statusInfo.pipeline);
+      if (sPipeNorm.includes("reserva")) {
+        finalPipeline = "Reserva do Sal";
+      } else if (sPipeNorm.includes("high") || sPipeNorm.includes("contorno")) {
+        finalPipeline = "High Contorno";
+      }
+    } else {
+      if (pNorm.includes("reserva")) {
+        finalPipeline = "Reserva do Sal";
+      } else if (pNorm.includes("high") || pNorm.includes("contorno") || pipelineId === "1" || pipelineId === "2") {
+        finalPipeline = "High Contorno";
+      }
+    }
+
+    const isOpus = finalPipeline === "Opus";
+
+    // 2. Determina o Status de Venda
     const statusVendaRaw = (() => {
       const stageNorm = normalizeStr(stageName);
 
-      // ✅ Se a etapa do CRM é "Venda Concluída" ou "Vendas Concluídas" (singular ou plural),
-      // considera automaticamente como ganho e soma o valor ao SITRE.
+      // ✅ Etapas de venda concluída no CRM
       if (stageNorm.includes("vendaconcluida") || stageNorm.includes("vendasconcluidas")) return "ganho";
 
       const updatedValue = findValue(row, ["atualizado?", "atualizado", "Atualizado", "atualizacao", "atualização"]);
@@ -368,6 +402,13 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       if (crmStatus.includes("ganho") || crmStatus.includes("vendido") || uNorm.includes("vendido") || uNorm === "sim" || vNorm === "sim") return "ganho";
 
       const createdVal = String(findValue(row, ["data", "created_at", "date", "dia"]) || "");
+      
+      // ✅ Para Opus: Mais leniente com leads de dias anteriores
+      if (isOpus) {
+        if (crmStatus.includes("perdido") || uNorm.includes("perdido")) return "perdido";
+        return "atual";
+      }
+
       if (isToday(uStr) || isToday(createdVal)) {
         if (crmStatus.includes("perdido") || uNorm.includes("perdido")) return "perdido";
         return "atual";
@@ -375,24 +416,14 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       return "perdido";
     })();
 
-    const pipelineId = String(findValue(row, ["id pipeline", "ID Pipeline", "id_funil"]) || "").trim();
-    const pipelineName = String(findValue(row, ["pipeline", "Pipeline", "funil"]) || "").trim();
-    const pNorm = normalizeStr(pipelineName);
-
-    let finalPipeline = "High Contorno";
-    if (statusInfo && statusInfo.pipeline) {
-      const sPipeNorm = normalizeStr(statusInfo.pipeline);
-      if (sPipeNorm.includes("reserva")) {
-        finalPipeline = "Reserva do Sal";
-      } else if (sPipeNorm.includes("high") || sPipeNorm.includes("contorno")) {
-        finalPipeline = "High Contorno";
-      }
-    } else {
-      if (pNorm.includes("reserva") && (pipelineId === "3" || pipelineId === "3.0")) {
-        finalPipeline = "Reserva do Sal";
-      } else if (pNorm.includes("high") || pNorm.includes("contorno") || pipelineId === "1" || pipelineId === "2") {
-        finalPipeline = "High Contorno";
-      }
+    // 3. Determina o Estágio de Exibição
+    let displayStage = stageName;
+    const stageNormLower = normalizeStr(stageName);
+    
+    if (statusVendaRaw === "ganho") {
+      displayStage = "Vendas Concluídas";
+    } else if (isOpus && stageNormLower.includes("estagionaomapeado")) {
+      displayStage = "Entrada do Lead";
     }
 
     if (filterPipelines.length === 0 || filterPipelines.some(fp => normalizeStr(fp) === normalizeStr(finalPipeline))) {
@@ -403,8 +434,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
         phone: String(findValue(row, ["telefone"]) || "---"),
         businessTitle: String(findValue(row, ["titulo do negocio"]) || "---"),
         pipeline: finalPipeline,
-        stage: stageName,
-        stageId: statusVendaRaw.includes('perdido') ? "lost" : stageId,
+        stage: displayStage,
+        stageId: statusVendaRaw.includes('perdido') ? "lost" : (statusVendaRaw === "ganho" ? "14" : stageId),
         quantity: 1,
         date: String(findValue(row, ["data"]) || "---"),
         statusVenda2: statusVendaRaw,
@@ -431,8 +462,16 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
     let effectiveStatus = isActuallyWon ? "ganho" : "perdido";
     if (isPerdido && isToday(entryDate)) effectiveStatus = "atual";
 
+    const sTableName = (sRow as any).__tableName || "";
     const pipelineName = String(findValue(sRow, ["Pipeline", "pipeline", "funil"]) || "");
-    const finalPipeline = normalizeStr(pipelineName).includes("reserva") ? "Reserva do Sal" : "High Contorno";
+    const pNorm = normalizeStr(pipelineName);
+    let finalPipeline = "High Contorno";
+    
+    if (sTableName.includes("_3") || pNorm.includes("opus")) {
+      finalPipeline = "Opus";
+    } else {
+      finalPipeline = pNorm.includes("reserva") ? "Reserva do Sal" : "High Contorno";
+    }
 
     let isWithinDate = true;
     const entryDateNorm = normalizeDateStr(entryDate);
@@ -462,7 +501,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
   // Processar tabela de valores (Exclusiva High Contorno conforme pedido)
   valoresRows.forEach((vRow, vIdx) => {
-    const finalPipeline = "High Contorno";
+    const vTableName = (vRow as any).__tableName || "";
+    const finalPipeline = vTableName.includes("_3") ? "Opus" : "High Contorno";
 
     const start = new Date("2025-02-01").getTime();
     const end = new Date("2025-10-31").getTime();

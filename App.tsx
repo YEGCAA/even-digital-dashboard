@@ -421,11 +421,11 @@ const App: React.FC = () => {
       return;
     }
 
-    const targetIds = idsToFetch.length > 0 ? idsToFetch : [currentUser.id];
+    const targetIds = idsToFetch.length > 0 ? idsToFetch : (currentUser.role === 'admin' ? clients.map(c => c.id) : [currentUser.id]);
     const tablesToFetch: string[] = [];
 
     targetIds.forEach(id => {
-      // Skip admin tables (ID 1) as they don't have suffix tables usually
+      // Skip admin tables (ID 1)
       if (id !== 1) {
         tablesToFetch.push(`Dados_${id}`);
         tablesToFetch.push(`Marketing_${id}`);
