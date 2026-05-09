@@ -1,11 +1,26 @@
-// Os tokens do Pipedrive ficam no servidor (Supabase Edge Function).
-// Aqui no frontend so identificamos qual cliente/pipeline carregar.
-import { supabase } from './supabase';
+// ATENCAO: por agora os tokens estao no bundle JS (visiveis via F12).
+// O caminho seguro e' a Edge Function em supabase/functions/pipedrive-proxy/.
+// Quando deployar a function, basta voltar este arquivo a versao com proxy.
 
-const SUPABASE_URL = 'https://rivyrupuoaxmecidlzsb.supabase.co';
-const PROXY_URL = `${SUPABASE_URL}/functions/v1/pipedrive-proxy`;
+interface PipedriveConfig {
+  token: string;
+  domain: string;
+  pipelineId: number;
+}
 
-// Chaves dos clientes Pipedrive disponiveis. Adicionar novas aqui (e tambem no Edge Function).
+const CONFIGS: Record<string, PipedriveConfig> = {
+  pedrosa: {
+    token: process.env.PIPEDRIVE_PEDROSA_TOKEN || '',
+    domain: process.env.PIPEDRIVE_PEDROSA_DOMAIN || '',
+    pipelineId: Number(process.env.PIPEDRIVE_PEDROSA_PIPELINE_ID || 0),
+  },
+  opus: {
+    token: process.env.PIPEDRIVE_OPUS_TOKEN || '',
+    domain: process.env.PIPEDRIVE_OPUS_DOMAIN || '',
+    pipelineId: Number(process.env.PIPEDRIVE_OPUS_PIPELINE_ID || 0),
+  },
+};
+
 export const PIPEDRIVE_CLIENT_KEYS = ['pedrosa', 'opus'] as const;
 export type PipedriveClientKey = typeof PIPEDRIVE_CLIENT_KEYS[number];
 
@@ -70,32 +85,22 @@ export interface PipedrivePipelineSnapshot {
   fetchedAt: number;
 }
 
-const callProxy = async (client: PipedriveClientKey, path: string, params: Record<string, string | number> = {}) => {
-  const { data: sess } = await supabase.auth.getSession();
-  const anon = (supabase as any).supabaseKey || '';
-  const res = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      // Anon key pra Supabase aceitar a chamada (mesmo com --no-verify-jwt, manda por garantia)
-      apikey: anon,
-      authorization: `Bearer ${sess?.session?.access_token || anon}`,
-    },
-    body: JSON.stringify({ client, path, params }),
-  });
-  if (!res.ok) throw new Error(`proxy HTTP ${res.status}`);
+const fetchJson = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Pipedrive HTTP ${res.status}`);
   const json = await res.json();
-  if (json && json.error) throw new Error(json.error);
-  if (!json?.success) throw new Error('Pipedrive returned success=false');
+  if (!json.success) throw new Error('Pipedrive API returned success=false');
   return json;
 };
 
-const fetchAllDeals = async (client: PipedriveClientKey, status: 'open' | 'won' | 'lost'): Promise<RawPipedriveDeal[]> => {
+const fetchAllDeals = async (cfg: PipedriveConfig, status: 'open' | 'won' | 'lost'): Promise<RawPipedriveDeal[]> => {
+  const base = `https://${cfg.domain}.pipedrive.com/api/v1`;
   const all: RawPipedriveDeal[] = [];
   let start = 0;
   const limit = 500;
   for (let page = 0; page < 20; page++) {
-    const json = await callProxy(client, 'deals', { status, start, limit });
+    const url = `${base}/deals?status=${status}&pipeline_id=${cfg.pipelineId}&start=${start}&limit=${limit}&api_token=${cfg.token}`;
+    const json = await fetchJson(url);
     const deals = (json.data || []) as RawPipedriveDeal[];
     all.push(...deals);
     const more = json.additional_data?.pagination?.more_items_in_collection;
@@ -114,16 +119,21 @@ const extractPerson = (d: RawPipedriveDeal) => {
 };
 
 export const fetchPipedrivePipeline = async (client: PipedriveClientKey): Promise<PipedrivePipelineSnapshot> => {
+  const cfg = CONFIGS[client];
+  if (!cfg || !cfg.token || !cfg.domain || !cfg.pipelineId) {
+    throw new Error(`Pipedrive nao configurado para cliente: ${client}`);
+  }
+  const base = `https://${cfg.domain}.pipedrive.com/api/v1`;
+
   const [stagesJson, openDeals, wonDeals, lostDeals] = await Promise.all([
-    callProxy(client, 'stages'),
-    fetchAllDeals(client, 'open'),
-    fetchAllDeals(client, 'won'),
-    fetchAllDeals(client, 'lost'),
+    fetchJson(`${base}/stages?pipeline_id=${cfg.pipelineId}&api_token=${cfg.token}`),
+    fetchAllDeals(cfg, 'open'),
+    fetchAllDeals(cfg, 'won'),
+    fetchAllDeals(cfg, 'lost'),
   ]);
 
   const stagesData = (stagesJson.data || []) as PipedriveStage[];
-  const pipelineIdResolved = stagesData[0]?.pipeline_id ?? 0;
-  const stages = stagesData.filter(s => s.pipeline_id === pipelineIdResolved);
+  const stages = stagesData.filter(s => s.pipeline_id === cfg.pipelineId);
   const stageIds = new Set(stages.map(s => s.id));
   const stageOrderById = new Map(stages.map(s => [s.id, s.order_nr]));
   const maxOrder = stages.reduce((m, s) => Math.max(m, s.order_nr), 0);
@@ -181,7 +191,7 @@ export const fetchPipedrivePipeline = async (client: PipedriveClientKey): Promis
   const lostLeads: PipedriveLead[] = lostInPipeline.map(toLead('lost')).sort(sortByDate);
 
   return {
-    pipelineId: pipelineIdResolved,
+    pipelineId: cfg.pipelineId,
     pipelineName,
     stages: stageStats,
     totalDeals: openInPipeline.length,

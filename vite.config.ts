@@ -15,7 +15,12 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY),
-      // Pipedrive: tokens ficam em secrets do Supabase (Edge Function pipedrive-proxy).
+      'process.env.PIPEDRIVE_PEDROSA_TOKEN': JSON.stringify(env.PIPEDRIVE_PEDROSA_TOKEN),
+      'process.env.PIPEDRIVE_PEDROSA_DOMAIN': JSON.stringify(env.PIPEDRIVE_PEDROSA_DOMAIN),
+      'process.env.PIPEDRIVE_PEDROSA_PIPELINE_ID': JSON.stringify(env.PIPEDRIVE_PEDROSA_PIPELINE_ID),
+      'process.env.PIPEDRIVE_OPUS_TOKEN': JSON.stringify(env.PIPEDRIVE_OPUS_TOKEN),
+      'process.env.PIPEDRIVE_OPUS_DOMAIN': JSON.stringify(env.PIPEDRIVE_OPUS_DOMAIN),
+      'process.env.PIPEDRIVE_OPUS_PIPELINE_ID': JSON.stringify(env.PIPEDRIVE_OPUS_PIPELINE_ID)
     },
     resolve: {
       alias: {
