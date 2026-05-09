@@ -18,6 +18,7 @@ interface KPICardProps {
   action?: React.ReactNode;
   statusTag?: KPIStatus;
   onClick?: () => void;
+  valueColorClass?: string;
 }
 
 import { StatusBadge } from '../App';
@@ -33,7 +34,8 @@ export const KPICard: React.FC<KPICardProps> = ({
   inverseColors = false,
   action,
   statusTag,
-  onClick
+  onClick,
+  valueColorClass
 }) => {
   // Extract numeric value for animation
   const getNumericValue = (val: string | number): number => {
@@ -206,7 +208,7 @@ export const KPICard: React.FC<KPICardProps> = ({
 
         {/* Valor principal */}
         <div className="flex items-center gap-3">
-          <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white leading-tight break-words">
+          <h3 className={`text-lg sm:text-xl lg:text-2xl font-black leading-tight break-words ${valueColorClass || 'text-slate-900 dark:text-white'}`}>
             {displayValue}
           </h3>
           {statusTag && <StatusBadge status={statusTag} />}

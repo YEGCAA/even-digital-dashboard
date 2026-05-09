@@ -32,11 +32,13 @@ const parseNumeric = (val: any): number => {
       s = s.replace(',', '');
     }
   } else if (s.includes('.')) {
-    // If only dot, could be decimal (11.09) or thousands (1.200)
+    // Se só tem ponto: só é separador de milhar se tiver EXATAMENTE 3 dígitos após o ponto
+    // Ex: "1.234" -> milhar -> 1234. Mas "0.184462" ou "1.12267" são decimais -> manter ponto
     const parts = s.split('.');
-    if (parts[parts.length - 1].length > 2) {
+    if (parts[parts.length - 1].length === 3) {
       s = s.replace(/\./g, '');
     }
+    // > 3 casas decimais = número decimal com precisão -> não remover o ponto
   }
 
   const num = parseFloat(s);
@@ -151,6 +153,10 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
   let totalReach = 0;
   let totalImpressions = 0;
   let totalClicks = 0;
+  let totalFrequencyWeighted = 0;
+  let totalImpressionsWithFreq = 0;
+  let totalCTRWeighted = 0;
+  let totalImpressionsWithCTR = 0;
   let totalSalesValue = 0;
   let countVendasID14 = 0;
 
@@ -162,9 +168,6 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
   let leadsList: ClientLead[] = [];
   const creativeMap: Record<string, CreativePlayback> = {};
-
-  let totalReachAgg = 0;
-  let totalImpressionsAgg = 0;
 
   const marketingTables = fetchedTables.filter(t => t.toLowerCase().includes('marketing'));
   const salesTables = fetchedTables.filter(t => t.toLowerCase().includes('venda') && !t.toLowerCase().includes('status'));
@@ -211,8 +214,8 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
 
   const cleanStatusStr = (s: any) => {
     const str = String(s || '').trim();
-    // Remove as many emojis and special chars as possible for normalization, but keep the core text
-    return str.replace(/[^\w\s]/gi, '').trim();
+    // Normalize NFD first so accented letters (í, ã, é) are decomposed before removing special chars
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/gi, '').trim();
   };
 
   interface StatusInfo {
@@ -264,12 +267,19 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       totalSpend += parseNumeric(findValue(row, ["Amount Spent", "investimento", "valor gasto", "custo", "gastos", "spent"]));
       totalMarketingLeads += parseNumeric(findValue(row, ["Leads", "lead count", "leads_gerados", "results", "resultados", "leads fb", "leads google"]));
       totalReach += parseNumeric(findValue(row, ["Reach", "Alcance"]));
-      totalImpressions += parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
+      const rowImpressions = parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
+      totalImpressions += rowImpressions;
       totalClicks += parseNumeric(findValue(row, ["Link Clicks", "Cliques", "Clicks"]));
-
-      // Aggregates for global frequency
-      totalReachAgg += parseNumeric(findValue(row, ["Reach", "Alcance"]));
-      totalImpressionsAgg += parseNumeric(findValue(row, ["Impressions", "Impressoes"]));
+      const rowFreq = parseNumeric(findValue(row, ["Frequency", "Frequencia", "Frequência"]));
+      if (rowFreq > 0 && rowImpressions > 0) {
+        totalFrequencyWeighted += rowFreq * rowImpressions;
+        totalImpressionsWithFreq += rowImpressions;
+      }
+      const rowCTR = parseNumeric(findValue(row, ["CTR", "ctr", "Click-Through Rate", "Taxa de Cliques"]));
+      if (rowCTR > 0 && rowImpressions > 0) {
+        totalCTRWeighted += rowCTR * rowImpressions;
+        totalImpressionsWithCTR += rowImpressions;
+      }
     }
 
     if (isWithinDateFilter) {
@@ -579,9 +589,13 @@ export const processSupabaseData = (rows: any[], fetchedTables: string[] = [], r
       totalSpend,
       marketingMetrics: {
         cpm: totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0,
-        ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0,
+        ctr: totalImpressionsWithCTR > 0
+          ? totalCTRWeighted / totalImpressionsWithCTR
+          : (totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0),
         cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
-        frequency: totalReachAgg > 0 ? totalImpressionsAgg / totalReachAgg : 1,
+        frequency: totalImpressionsWithFreq > 0
+          ? totalFrequencyWeighted / totalImpressionsWithFreq
+          : (totalReach > 0 ? totalImpressions / totalReach : 0),
         cpl: totalMarketingLeads > 0 ? totalSpend / totalMarketingLeads : 0,
         reach: totalReach, impressions: totalImpressions, clicks: totalClicks, leads: totalMarketingLeads, landingPageConvRate: 0
       },

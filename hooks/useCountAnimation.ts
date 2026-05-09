@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface UseCountAnimationOptions {
     duration?: number; // duration in milliseconds
@@ -11,50 +11,52 @@ export const useCountAnimation = (
 ): number => {
     const { duration = 1500, decimals = 0 } = options;
     const [currentValue, setCurrentValue] = useState(0);
+    const lastTargetRef = useRef(targetValue);
+    const rafRef = useRef<number | null>(null);
 
     useEffect(() => {
-        // Reset to 0 when target changes
-        setCurrentValue(0);
+        // Anima do ultimo valor exibido ate o novo target — funciona pra cima OU pra baixo
+        const startValue = lastTargetRef.current === targetValue ? 0 : currentValue;
+        const endValue = targetValue;
+        lastTargetRef.current = targetValue;
 
-        // If target is 0, no animation needed
-        if (targetValue === 0) {
+        if (startValue === endValue) {
+            setCurrentValue(endValue);
             return;
         }
 
         const startTime = Date.now();
-        const startValue = 0;
-        const endValue = targetValue;
 
-        // Use easeOutExpo for a fast start and smooth landing
+        // easeOutExpo: rapido no comeco, suave no final
         const easeOutExpo = (t: number): number => {
             return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
         };
 
+        // Cancela animacao anterior em voo
+        if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+
         const animate = () => {
-            const now = Date.now();
-            const elapsed = now - startTime;
+            const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
-
-            // Apply easing function
-            const easedProgress = easeOutExpo(progress);
-            const newValue = startValue + (endValue - startValue) * easedProgress;
-
-            // Round to specified decimal places
-            const roundedValue = decimals > 0
+            const eased = easeOutExpo(progress);
+            const newValue = startValue + (endValue - startValue) * eased;
+            const rounded = decimals > 0
                 ? Math.round(newValue * Math.pow(10, decimals)) / Math.pow(10, decimals)
                 : Math.round(newValue);
-
-            setCurrentValue(roundedValue);
-
+            setCurrentValue(rounded);
             if (progress < 1) {
-                requestAnimationFrame(animate);
+                rafRef.current = requestAnimationFrame(animate);
             } else {
-                // Ensure we end exactly at target value
                 setCurrentValue(endValue);
+                rafRef.current = null;
             }
         };
 
-        requestAnimationFrame(animate);
+        rafRef.current = requestAnimationFrame(animate);
+        return () => {
+            if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [targetValue, duration, decimals]);
 
     return currentValue;

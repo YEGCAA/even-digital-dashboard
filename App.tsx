@@ -25,6 +25,7 @@ import { KPICard, KPIStatus } from './components/KPICard';
 import { MarketingEvolutionChart } from './components/MarketingEvolutionChart';
 import { VideoRetentionChart } from './components/VideoRetentionChart';
 import { supabase } from './services/supabase';
+import { fetchPipedrivePipeline, findStage, PipedrivePipelineSnapshot, PIPEDRIVE_CLIENT_KEYS, PipedriveClientKey } from './services/pipedriveService';
 
 const getRowValue = (row: any, possibleKeys: string[]) => {
   if (!row) return null;
@@ -106,6 +107,9 @@ const App: React.FC = () => {
 
   const [isInspectOpen, setIsInspectOpen] = useState(false);
   const [inspectTable, setInspectTable] = useState<string | null>(null);
+
+  const [pipedrive, setPipedrive] = useState<PipedrivePipelineSnapshot | null>(null);
+  const [pipedriveError, setPipedriveError] = useState<string | null>(null);
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('even_auth') === 'true');
   const [currentUser, setCurrentUser] = useState<UserAuth | null>(() => {
@@ -524,6 +528,53 @@ const App: React.FC = () => {
       console.error('Error loading clients:', err);
     }
   };
+
+  // Detecta qual cliente Pipedrive esta ativo (pedrosa, opus, ...) baseado no usuario logado
+  // ou no cliente selecionado pelo admin. Retorna a chave ou null.
+  const activePipedriveKey = useMemo<PipedriveClientKey | null>(() => {
+    const matchKey = (s: string | undefined | null): PipedriveClientKey | null => {
+      if (!s) return null;
+      const lower = s.toLowerCase();
+      return (PIPEDRIVE_CLIENT_KEYS.find(k => lower.includes(k)) as PipedriveClientKey | undefined) || null;
+    };
+    const direct = matchKey(currentUser?.username);
+    if (direct) return direct;
+    if (currentUser?.role === 'admin' && selectedClientIds.length > 0) {
+      const selected = clients.filter(c => selectedClientIds.includes(c.id));
+      const matched = selected
+        .map(c => matchKey(c.user))
+        .filter((k): k is PipedriveClientKey => !!k);
+      const unique = Array.from(new Set(matched));
+      if (unique.length === 1) return unique[0];
+    }
+    return null;
+  }, [currentUser, clients, selectedClientIds]);
+
+  const isPedrosaContext = activePipedriveKey !== null;
+
+  useEffect(() => {
+    if (!activePipedriveKey) {
+      setPipedrive(null);
+      setPipedriveError(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const snap = await fetchPipedrivePipeline(activePipedriveKey);
+        if (!cancelled) {
+          setPipedrive(snap);
+          setPipedriveError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) setPipedriveError(err?.message || 'Erro Pipedrive');
+        console.error('Pipedrive fetch error:', err);
+      }
+    };
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [activePipedriveKey]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -1063,7 +1114,10 @@ const App: React.FC = () => {
 
     const totalLeads = leadsForAnalysis.reduce((sum, l) => sum + (l.quantity || 1), 0);
 
-    const ganhoLeads = leadsForAnalysis.filter(l => {
+    // Ganho metrics devem sempre vir de data.leadsList (sem filtro de selectedVendaStatus)
+    // para que "Vendas Concluídas" apareça corretamente independente do filtro de status ativo
+    const allLeads = data?.leadsList || [];
+    const ganhoLeads = allLeads.filter(l => {
       const sVendaNorm = normalizeText(l.statusVenda2);
       const stageNormLocal = normalizeText(l.stage);
       return sVendaNorm.includes('ganh') || stageNormLocal.includes('ganh') || stageNormLocal.includes('vendaconcluida');
@@ -1073,7 +1127,7 @@ const App: React.FC = () => {
     const totalUnitsSold = ganhoLeads.reduce((sum, l) => sum + (l.quantity || 1), 0);
 
     return { totalRevenue, totalUnitsSold, totalLeads };
-  }, [leadsForAnalysis]);
+  }, [leadsForAnalysis, data]);
 
   // Recalculate funnel data with CUMULATIVE counts (leads in advanced stages count in all previous)
   const correctedFunnelData = useMemo(() => {
@@ -1198,6 +1252,149 @@ const App: React.FC = () => {
       };
     });
   }, [data, leadsForAnalysis, selectedVendaStatus]);
+
+  // Helper: pega 'YYYY-MM-DD' de uma string add_time do Pipedrive (ex: '2026-03-28 11:59:18')
+  const pdDateOnly = (s: string) => (s || '').slice(0, 10);
+  const inDateRange = (leadDate: string) => {
+    const d = pdDateOnly(leadDate);
+    if (!d) return true; // sem data, nao filtra
+    if (startDate && d < startDate) return false;
+    if (endDate && d > endDate) return false;
+    return true;
+  };
+
+  // Pipedrive filtrado por data + pipeline (sem filtro de status) — usado pela aba Overview
+  const pipedriveDateFiltered = useMemo(() => {
+    if (!pipedrive) return null;
+    const pipelineNorm = (pipedrive.pipelineName || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    if (selectedPipelines.length > 0) {
+      const allows = selectedPipelines.some(p =>
+        p.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim() === pipelineNorm
+      );
+      if (!allows) return null;
+    }
+    return {
+      open: pipedrive.openLeads.filter(l => inDateRange(l.addTime)),
+      won: pipedrive.wonLeads.filter(l => inDateRange(l.addTime)),
+      lost: pipedrive.lostLeads.filter(l => inDateRange(l.addTime)),
+    };
+  }, [pipedrive, selectedPipelines, startDate, endDate]);
+
+  // Metricas Pipedrive filtradas — reagem a Status Venda + Pipelines + Data
+  const pipedriveFiltered = useMemo(() => {
+    if (!pipedrive || !pipedriveDateFiltered) return null;
+
+    // Aplica filtro de Status Venda em cima do filtro data+pipeline
+    let openSel = pipedriveDateFiltered.open;
+    let wonSel = pipedriveDateFiltered.won;
+    let lostSel = pipedriveDateFiltered.lost;
+    if (selectedVendaStatus === 'Atual') {
+      lostSel = []; // Atual = abertos + ganhos
+    } else if (selectedVendaStatus === 'Ganho') {
+      openSel = []; lostSel = [];
+    } else if (selectedVendaStatus === 'Perdido') {
+      openSel = []; wonSel = [];
+    }
+    // 'Todos' = manter os 3
+
+    const all = [...openSel, ...wonSel, ...lostSel];
+    const sumValue = (arr: typeof all) => arr.reduce((acc, d) => acc + (Number(d.value) || 0), 0);
+
+    // % cumulativa do funil considerando o filtro
+    // Para cada etapa, conta quantos leads do filtro chegaram pelo menos a esta ordem
+    const stageOrderByName = new Map(pipedrive.stages.map(s => [s.stageName, s.order]));
+    const maxOrder = pipedrive.stages.reduce((m, s) => Math.max(m, s.order), 0);
+    const effectiveOrder = (lead: typeof all[number]) => {
+      // Ganhos passaram por tudo
+      if (lead.status === 'won') return maxOrder;
+      return stageOrderByName.get(lead.stageName) ?? 0;
+    };
+    const stagesFiltered = pipedrive.stages.map(s => {
+      const dealsHere = all.filter(d => d.stageName === s.stageName && d.status === 'open');
+      const cumulative = all.filter(d => effectiveOrder(d) >= s.order).length;
+      return {
+        stageName: s.stageName,
+        order: s.order,
+        count: dealsHere.length,
+        value: dealsHere.reduce((acc, d) => acc + (Number(d.value) || 0), 0),
+        cumulativeCount: cumulative,
+        percent: all.length > 0 ? (cumulative / all.length) * 100 : 0,
+      };
+    });
+
+    return {
+      openCount: openSel.length,
+      openValue: sumValue(openSel),
+      wonCount: wonSel.length,
+      wonValue: sumValue(wonSel),
+      lostCount: lostSel.length,
+      lostValue: sumValue(lostSel),
+      totalCount: all.length,
+      totalValue: sumValue(all),
+      stages: stagesFiltered,
+    };
+  }, [pipedrive, pipedriveDateFiltered, selectedVendaStatus]);
+
+  // Funil Overview baseado no Pipedrive (so data+pipeline, sem status). Substitui filteredFunnelForOverview.
+  const pipedriveOverviewFunnel = useMemo(() => {
+    if (!pipedrive || !pipedriveDateFiltered) return null;
+    const all = [
+      ...pipedriveDateFiltered.open.map(l => ({ ...l, statusKey: 'open' as const })),
+      ...pipedriveDateFiltered.won.map(l => ({ ...l, statusKey: 'won' as const })),
+      ...pipedriveDateFiltered.lost.map(l => ({ ...l, statusKey: 'lost' as const })),
+    ];
+    const stageOrderByName = new Map(pipedrive.stages.map(s => [s.stageName, s.order]));
+    const maxOrder = pipedrive.stages.reduce((m, s) => Math.max(m, s.order), 0);
+    const effectiveOrder = (lead: typeof all[number]) => {
+      if (lead.statusKey === 'won') return maxOrder;
+      return stageOrderByName.get(lead.stageName) ?? 0;
+    };
+    // 6 etapas exibidas no Overview, mesma ordem do filteredFunnelForOverview original
+    const overviewTargets = [
+      { label: 'Entrada do Lead', match: ['entrada do lead'] },
+      { label: 'Mensagem Inicial', match: ['mensagem inicial'] },
+      { label: 'Em Atendimento', match: ['em atendimento', 'atendimento'] },
+      { label: 'Reunião Agendada', match: ['reuniao agendada', 'reuniao marcada'] },
+      { label: 'Reunião Realizada', match: ['reuniao realizada'] },
+      { label: 'Vendas Concluídas', match: ['vendas concluidas', 'venda concluida'] },
+    ];
+    const norm2 = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_]/g, '');
+    const PALETTE = ['#3b82f6','#06b6d4','#0ea5e9','#a855f7','#ec4899','#10b981'];
+    const items = overviewTargets.map((target, idx) => {
+      const stage = pipedrive.stages.find(s => target.match.some(m => norm2(s.stageName).includes(norm2(m)) || norm2(m).includes(norm2(s.stageName))));
+      const order = stage?.order ?? 0;
+      const cumulative = stage ? all.filter(d => effectiveOrder(d) >= order).length : 0;
+      return {
+        stage: target.label,
+        count: cumulative,
+        color: PALETTE[idx % PALETTE.length],
+        value: 0,
+        conversion: 0,
+      };
+    });
+    // Calcula conversao relativa entre etapas
+    return items.map((s, i) => ({
+      ...s,
+      conversion: i === 0
+        ? 100
+        : (items[i - 1].count > 0 ? Math.min((s.count / items[i - 1].count) * 100, 100) : 0),
+    }));
+  }, [pipedrive, pipedriveDateFiltered]);
+
+  // Helper: encontra uma etapa filtrada por nome (fuzzy)
+  const findFilteredStage = (...candidates: string[]) => {
+    if (!pipedriveFiltered) return null;
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_]/g, '');
+    for (const c of candidates) {
+      const n = norm(c);
+      const hit = pipedriveFiltered.stages.find(s => {
+        const sn = norm(s.stageName);
+        return sn === n || sn.includes(n) || n.includes(sn);
+      });
+      if (hit) return hit;
+    }
+    return null;
+  };
 
   const statusMap = useMemo(() => {
     if (!data || !correctedFunnelData) return {};
@@ -1943,6 +2140,18 @@ ${JSON.stringify(tabData, null, 2)}`
           {
             activeTab === 'overview' && data && (
               <div className={`space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
+                {(() => {
+                  // Quando ha Pipedrive ativo, os KPIs do Overview tambem usam dados do CRM
+                  const pdOpen = pipedriveDateFiltered?.open?.length ?? 0;
+                  const pdWon = pipedriveDateFiltered?.won?.length ?? 0;
+                  const pdLost = pipedriveDateFiltered?.lost?.length ?? 0;
+                  const pdWonValue = pipedriveDateFiltered?.won.reduce((acc, d) => acc + (d.value || 0), 0) ?? 0;
+                  const pdTotalLeads = pdOpen + pdWon + pdLost;
+                  const usePd = !!pipedriveDateFiltered;
+                  const overviewRevenue = usePd ? pdWonValue : salesMetricsForAnalysis.totalRevenue;
+                  const overviewLeads = usePd ? pdTotalLeads : salesMetricsForAnalysis.totalLeads;
+                  return (
+                <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <KPICard
                     title="VGV Gerenciado"
@@ -1953,15 +2162,15 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Vendas Concluídas"
-                    value={FORMATTERS.summarizedCurrency(salesMetricsForAnalysis.totalRevenue)}
-                    meta="STATUS ATUAL"
-                    metaValue="VGV Realizado"
+                    value={FORMATTERS.summarizedCurrency(overviewRevenue)}
+                    meta={usePd ? "GANHOS PIPEDRIVE" : "STATUS ATUAL"}
+                    metaValue={usePd ? `${pdWon} negocios` : "VGV Realizado"}
                     icon={<ShoppingBag size={16} />}
                     trend="up"
                   />
                   <KPICard
                     title="Vendas / VGV"
-                    value={FORMATTERS.percent((salesMetricsForAnalysis.totalRevenue / (data.clientInfo.vgv || 1)) * 100)}
+                    value={FORMATTERS.percent((overviewRevenue / (data.clientInfo.vgv || 1)) * 100)}
                     meta="TAXA DE SUCESSO"
                     metaValue="Performance"
                     icon={<Percent size={16} />}
@@ -1980,11 +2189,13 @@ ${JSON.stringify(tabData, null, 2)}`
                   />
                   <KPICard
                     title="Total de Leads"
-                    value={FORMATTERS.number(salesMetricsForAnalysis.totalLeads)}
+                    value={FORMATTERS.number(overviewLeads)}
                     meta={goals.leads.value > 0 ? (goals.leads.mode === 'fixo' ? "META FIXA" : goals.leads.mode === 'diario' ? "META DIÁRIA" : "META MENSAL") : undefined}
                     metaValue={goals.leads.value > 0 ? FORMATTERS.number(scaledGoals.leads) : undefined}
                     icon={<RefreshCw size={16} />}
-                    statusTag={statusMap.leads}
+                    statusTag={usePd
+                      ? calculateStatus(overviewLeads, scaledGoals.leads, 'higher-better', goals.leads.mode)
+                      : statusMap.leads}
                   />
                   <KPICard
                     title="CPL Médio"
@@ -2024,17 +2235,17 @@ ${JSON.stringify(tabData, null, 2)}`
                         <h3 className="text-sm sm:text-lg font-semibold text-slate-800 dark:text-white">Fluxo do Funil de Vendas</h3>
                       </div>
                       <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                        Total: {filteredFunnelForOverview?.[0]?.count || 0} Leads
+                        Total: {(pipedriveOverviewFunnel ?? filteredFunnelForOverview)?.[0]?.count || 0} Leads
                       </div>
                     </div>
-                    <FunnelChartComponent data={filteredFunnelForOverview} />
+                    <FunnelChartComponent data={pipedriveOverviewFunnel ?? filteredFunnelForOverview} />
                   </div>
                   <div className="lg:col-span-5 flex flex-col gap-3">
                     <div className="bg-primary dark:bg-primary p-6 sm:p-8 rounded-xl text-white relative overflow-hidden flex flex-col justify-between shadow-lg min-h-[180px] sm:min-h-[220px]">
                       <div className="relative z-10">
                         <p className="text-xs sm:text-sm font-medium opacity-80 mb-1 sm:mb-2 uppercase tracking-widest">ROI Estratégico Estimado</p>
                         <p className="text-4xl sm:text-6xl font-black mb-3 sm:mb-4 tracking-tight leading-none italic">
-                          {data.metrics.totalSpend > 0 ? (salesMetricsForAnalysis.totalRevenue / data.metrics.totalSpend).toFixed(1) : 0}x
+                          {data.metrics.totalSpend > 0 ? (overviewRevenue / data.metrics.totalSpend).toFixed(1) : 0}x
                         </p>
                         <div className="max-w-[240px]">
                           <p className="text-[9px] sm:text-xs opacity-60 leading-relaxed font-bold uppercase tracking-tighter">
@@ -2061,6 +2272,9 @@ ${JSON.stringify(tabData, null, 2)}`
                     </div>
                   </div>
                 </div>
+                </>
+                  );
+                })()}
               </div>
             )
           }
@@ -2210,7 +2424,7 @@ ${JSON.stringify(tabData, null, 2)}`
                       { title: "Investimento", val: FORMATTERS.summarizedCurrency(data.metrics.totalSpend), icon: <DollarSign size={14} />, meta: FORMATTERS.currency(scaledGoals.amountSpent), status: statusMap.amountSpent },
                       { title: "Alcance", val: FORMATTERS.summarized(data.metrics.marketingMetrics.reach), icon: <ReachIcon size={14} />, meta: "Único" },
                       { title: "Impressões", val: FORMATTERS.summarized(data.metrics.marketingMetrics.impressions), icon: <ReachIcon size={14} />, meta: "Visualizações" },
-                      { title: "Frequência", val: data.metrics.marketingMetrics.frequency.toFixed(2), icon: <RefreshCw size={14} />, meta: scaledGoals.frequency.toFixed(1), status: statusMap.frequency },
+                      { title: "Frequência", val: data.metrics.marketingMetrics.frequency.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), icon: <RefreshCw size={14} />, meta: scaledGoals.frequency.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }), status: statusMap.frequency },
                       { title: "CPM (Custo p/ Mil)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpm), icon: <Percent size={14} />, meta: FORMATTERS.currency(scaledGoals.cpm), status: statusMap.cpm }
                     ].map((kpi, idx) => (
                       <div key={idx} className="px-4 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
@@ -2375,105 +2589,135 @@ ${JSON.stringify(tabData, null, 2)}`
               <div className={`space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 transition-opacity ${isFiltering ? 'opacity-50' : 'opacity-100'}`}>
                 {/* Sales Performance KPI Cards - FIRST ROW */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  <KPICard
-                    title="Faturamento"
-                    onClick={() => setIsRevenueModalOpen(true)}
-                    value={
-                      <span className="text-xl sm:text-2xl font-black tracking-tighter block text-emerald-500">
-                        {FORMATTERS.summarizedCurrency(salesMetricsForAnalysis.totalRevenue)}
-                      </span>
-                    }
-                    meta="RECEITA AGREGADA"
-                    metaValue="Total"
-                    icon={<DollarSign size={16} />}
-                    trend="up"
-                  />
+                  {(() => {
+                    // Quando ha snapshot do Pipedrive (Pedrosa), os KPIs do topo usam os dados do CRM filtrados
+                    // por Status Venda + Pipelines. Faturamento/Ticket consideram so os ganhos do filtro;
+                    // Quantidade e %Meta consideram a contagem total filtrada (Atual/Perdido/Todos somam).
+                    const usePd = !!pipedriveFiltered;
+                    const totalRevenue = usePd ? pipedriveFiltered!.wonValue : salesMetricsForAnalysis.totalRevenue;
+                    const totalUnitsSold = usePd ? pipedriveFiltered!.wonCount : salesMetricsForAnalysis.totalUnitsSold;
+                    const totalLeads = usePd ? pipedriveFiltered!.totalCount : salesMetricsForAnalysis.totalLeads;
+                    const ticket = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0;
+                    const roi = data.metrics.totalSpend > 0 ? totalRevenue / data.metrics.totalSpend : 0;
+                    const pctMeta = scaledGoals.leads > 0 ? (totalLeads / scaledGoals.leads) * 100 : 0;
 
-                  <KPICard
-                    title="Ticket Médio"
-                    onClick={() => setIsMetricModalOpen({
-                      isOpen: true,
-                      title: "Ticket Médio",
-                      value: FORMATTERS.currency(salesMetricsForAnalysis.totalUnitsSold > 0 ? salesMetricsForAnalysis.totalRevenue / salesMetricsForAnalysis.totalUnitsSold : 0),
-                      subValue: "Valor médio bruto por unidade vendida"
-                    })}
-                    value={
-                      <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {FORMATTERS.summarizedCurrency(salesMetricsForAnalysis.totalUnitsSold > 0 ? salesMetricsForAnalysis.totalRevenue / salesMetricsForAnalysis.totalUnitsSold : 0)}
-                      </span>
-                    }
-                    meta="VALOR MÉDIO"
-                    metaValue="Por Unidade"
-                    icon={<TrendingUp size={16} />}
-                  />
+                    return (
+                      <>
+                        <KPICard
+                          title="Faturamento"
+                          onClick={() => setIsRevenueModalOpen(true)}
+                          value={FORMATTERS.summarizedCurrency(totalRevenue)}
+                          valueColorClass="text-emerald-500"
+                          meta={usePd ? "GANHOS PIPEDRIVE" : "RECEITA AGREGADA"}
+                          metaValue={usePd ? `${totalUnitsSold} negocios` : "Total"}
+                          icon={<DollarSign size={16} />}
+                          trend="up"
+                        />
 
-                  <KPICard
-                    title="Quantidade"
-                    onClick={() => setIsMetricModalOpen({
-                      isOpen: true,
-                      title: "Quantidade de Vendas",
-                      value: FORMATTERS.number(salesMetricsForAnalysis.totalUnitsSold),
-                      subValue: `Meta estabelecida: ${FORMATTERS.number(scaledGoals.quantity)} unidades`
-                    })}
-                    value={
-                      <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {FORMATTERS.summarized(salesMetricsForAnalysis.totalUnitsSold)}
-                      </span>
-                    }
-                    meta={goals.quantity.value > 0 ? "PROGRESSO" : undefined}
-                    metaValue={goals.quantity.value > 0 ? `Meta: ${FORMATTERS.number(scaledGoals.quantity)} un.` : undefined}
-                    icon={<ShoppingBag size={16} />}
-                    statusTag={statusMap.quantity}
-                    trend="up"
-                  />
+                        <KPICard
+                          title="Ticket Médio"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Ticket Médio",
+                            value: FORMATTERS.currency(ticket),
+                            subValue: usePd
+                              ? `Valor medio por negocio ganho no Pipedrive (${FORMATTERS.currency(totalRevenue)} / ${totalUnitsSold} ganhos)`
+                              : "Valor médio bruto por unidade vendida"
+                          })}
+                          value={FORMATTERS.summarizedCurrency(ticket)}
+                          meta="VALOR MÉDIO"
+                          metaValue="Por Negocio"
+                          icon={<TrendingUp size={16} />}
+                        />
 
-                  <KPICard
-                    title="ROI"
-                    onClick={() => setIsMetricModalOpen({
-                      isOpen: true,
-                      title: "Retorno sobre Investimento (ROI)",
-                      value: `${data.metrics.totalSpend > 0 ? (salesMetricsForAnalysis.totalRevenue / data.metrics.totalSpend).toFixed(2) : '0.00'}x`,
-                      subValue: `Baseado em ${FORMATTERS.currency(salesMetricsForAnalysis.totalRevenue)} de receita sobre ${FORMATTERS.currency(data.metrics.totalSpend)} investidos`
-                    })}
-                    value={
-                      <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {data.metrics.totalSpend > 0 ? (salesMetricsForAnalysis.totalRevenue / data.metrics.totalSpend).toFixed(1) : '0.0'}x
-                      </span>
-                    }
-                    meta="RETORNO SOBRE INVESTIMENTO"
-                    metaValue="Multiplicador"
-                    icon={<Percent size={16} />}
-                    trend="up"
-                  />
+                        <KPICard
+                          title="Quantidade"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Quantidade de Vendas",
+                            value: FORMATTERS.number(totalUnitsSold),
+                            subValue: usePd
+                              ? `Negocios ganhos no Pipedrive. Meta: ${FORMATTERS.number(scaledGoals.quantity)} unidades`
+                              : `Meta estabelecida: ${FORMATTERS.number(scaledGoals.quantity)} unidades`
+                          })}
+                          value={FORMATTERS.summarized(totalUnitsSold)}
+                          meta={goals.quantity.value > 0 ? "PROGRESSO" : undefined}
+                          metaValue={goals.quantity.value > 0 ? `Meta: ${FORMATTERS.number(scaledGoals.quantity)} un.` : undefined}
+                          icon={<ShoppingBag size={16} />}
+                          statusTag={usePd
+                            ? calculateStatus(totalUnitsSold, scaledGoals.quantity, 'higher-better', goals.quantity.mode)
+                            : statusMap.quantity}
+                          trend="up"
+                        />
 
-                  <KPICard
-                    title="% para Meta"
-                    onClick={() => setIsMetricModalOpen({
-                      isOpen: true,
-                      title: "Progresso da Meta de Leads",
-                      value: `${scaledGoals.leads > 0 ? ((salesMetricsForAnalysis.totalLeads / scaledGoals.leads) * 100).toFixed(2) : '0.00'}%`,
-                      subValue: `${FORMATTERS.number(salesMetricsForAnalysis.totalLeads)} leads conquistados de uma meta de ${FORMATTERS.number(scaledGoals.leads)}`
-                    })}
-                    value={
-                      <span className="text-xl sm:text-2xl font-black tracking-tighter block">
-                        {scaledGoals.leads > 0 ? ((salesMetricsForAnalysis.totalLeads / scaledGoals.leads) * 100).toFixed(1) : '0.0'}%
-                      </span>
-                    }
-                    meta={goals.leads.value > 0 ? "PROGRESSO" : undefined}
-                    metaValue={goals.leads.value > 0 ? `Meta: ${FORMATTERS.number(scaledGoals.leads)} leads` : undefined}
-                    icon={<Target size={16} />}
-                    statusTag={statusMap.leads}
-                  />
+                        <KPICard
+                          title="ROI"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Retorno sobre Investimento (ROI)",
+                            value: `${roi.toFixed(2)}x`,
+                            subValue: `Baseado em ${FORMATTERS.currency(totalRevenue)} de ${usePd ? 'ganhos Pipedrive' : 'receita'} sobre ${FORMATTERS.currency(data.metrics.totalSpend)} investidos`
+                          })}
+                          value={`${roi.toFixed(1)}x`}
+                          meta="RETORNO SOBRE INVESTIMENTO"
+                          metaValue="Multiplicador"
+                          icon={<Percent size={16} />}
+                          trend="up"
+                        />
+
+                        <KPICard
+                          title="% para Meta"
+                          onClick={() => setIsMetricModalOpen({
+                            isOpen: true,
+                            title: "Progresso da Meta de Leads",
+                            value: `${pctMeta.toFixed(2)}%`,
+                            subValue: usePd
+                              ? `${FORMATTERS.number(totalLeads)} leads no Pipedrive (todos os status) de uma meta de ${FORMATTERS.number(scaledGoals.leads)}`
+                              : `${FORMATTERS.number(totalLeads)} leads conquistados de uma meta de ${FORMATTERS.number(scaledGoals.leads)}`
+                          })}
+                          value={`${pctMeta.toFixed(1)}%`}
+                          meta={goals.leads.value > 0 ? "PROGRESSO" : undefined}
+                          metaValue={goals.leads.value > 0 ? `Meta: ${FORMATTERS.number(scaledGoals.leads)} leads` : undefined}
+                          icon={<Target size={16} />}
+                          statusTag={usePd
+                            ? calculateStatus(totalLeads, scaledGoals.leads, 'higher-better', goals.leads.mode)
+                            : statusMap.leads}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Conversion Metrics KPI Cards - SECOND ROW */}
+                {pipedriveError && !pipedrive && isPedrosaContext && (
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-rose-500 px-1">
+                    Pipedrive offline: {pipedriveError}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   {(() => {
                     const totalLeadsCount = leadsForAnalysis.length || 1;
+                    const totalAllLeads = (data?.leadsList?.length) || 1;
+                    const usePipedrive = !!pipedriveFiltered;
+                    const filterDenom = pipedriveFiltered?.totalCount ?? 0;
+                    const fmtPct = (n: number) => `${n.toFixed(1)}%`;
+                    const pdProps = (stage: { percent: number; cumulativeCount: number } | null) => ({
+                      value: fmtPct(stage?.percent ?? 0),
+                      meta: 'NEGOCIOS',
+                      metaValue: `${stage?.cumulativeCount ?? 0} de ${filterDenom}`,
+                    });
+                    const pdMensagens = findFilteredStage('mensagem inicial');
+                    const pdAtendimento = findFilteredStage('atendimento', 'em atendimento');
+                    const pdReuniaoMarcada = findFilteredStage('reuniao agendada', 'reuniao marcada');
+                    const pdReuniaoRealizada = findFilteredStage('reuniao realizada');
                     const getCumulativePercent = (stageName: string) => {
+                      const tNorm = stageName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
+                      // Vendas Concluídas: usa sempre o total real de ganhos (ignora filtro de selectedVendaStatus)
+                      if (tNorm.includes('vendaconcluida') || tNorm.includes('vendasconcluida')) {
+                        return ((salesMetricsForAnalysis.totalUnitsSold / totalAllLeads) * 100).toFixed(2);
+                      }
                       const stage = correctedFunnelData.find(s => {
                         const sNorm = s.stage.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
-                        const tNorm = stageName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]/g, '');
                         return sNorm.includes(tNorm) || tNorm.includes(sNorm);
                       });
                       return stage ? ((stage.count / totalLeadsCount) * 100).toFixed(2) : '0.00';
@@ -2485,75 +2729,120 @@ ${JSON.stringify(tabData, null, 2)}`
                           title="Mensagens Enviadas"
                           onClick={() => setIsMetricModalOpen({
                             isOpen: true,
-                            title: "Taxa de Mensagens Enviadas",
-                            value: `${getCumulativePercent('mensagem inicial')}%`,
-                            subValue: `Percentual de leads que receberam o primeiro contato. Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%`
+                            title: usePipedrive ? "Mensagens Enviadas (Pipedrive)" : "Taxa de Mensagens Enviadas",
+                            value: usePipedrive
+                              ? `${fmtPct(pdMensagens?.percent ?? 0)} (${pdMensagens?.cumulativeCount ?? 0} de ${filterDenom})`
+                              : `${getCumulativePercent('mensagem inicial')}%`,
+                            subValue: usePipedrive
+                              ? `% de leads do Pipedrive que chegaram a "Mensagem Inicial" ou alem`
+                              : `Percentual de leads que receberam o primeiro contato. Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%`
                           })}
-                          value={`${getCumulativePercent('mensagem inicial')}%`}
-                          meta={goals.mensagensEnviadas.value > 0 ? "TAXA DE CONTATO" : undefined}
-                          metaValue={goals.mensagensEnviadas.value > 0 ? `Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%` : undefined}
+                          {...(usePipedrive
+                            ? pdProps(pdMensagens)
+                            : {
+                                value: `${getCumulativePercent('mensagem inicial')}%`,
+                                meta: goals.mensagensEnviadas.value > 0 ? "TAXA DE CONTATO" : undefined,
+                                metaValue: goals.mensagensEnviadas.value > 0 ? `Meta: ${scaledGoals.mensagensEnviadas.toFixed(1)}%` : undefined,
+                              })}
                           icon={<Mail size={16} />}
-                          statusTag={statusMap.mensagensEnviadas}
+                          statusTag={usePipedrive ? undefined : statusMap.mensagensEnviadas}
                         />
 
                         <KPICard
                           title="Atendimento"
                           onClick={() => setIsMetricModalOpen({
                             isOpen: true,
-                            title: "Taxa de Atendimento",
-                            value: `${getCumulativePercent('em atendimento')}%`,
-                            subValue: `Percentual de leads em processo de qualificação. Meta: ${scaledGoals.atendimento.toFixed(1)}%`
+                            title: usePipedrive ? "Atendimento (Pipedrive)" : "Taxa de Atendimento",
+                            value: usePipedrive
+                              ? `${fmtPct(pdAtendimento?.percent ?? 0)} (${pdAtendimento?.cumulativeCount ?? 0} de ${filterDenom})`
+                              : `${getCumulativePercent('em atendimento')}%`,
+                            subValue: usePipedrive
+                              ? `% de leads do Pipedrive que chegaram a "Atendimento" ou alem`
+                              : `Percentual de leads em processo de qualificação. Meta: ${scaledGoals.atendimento.toFixed(1)}%`
                           })}
-                          value={`${getCumulativePercent('em atendimento')}%`}
-                          meta={goals.atendimento.value > 0 ? "EM ATENDIMENTO" : undefined}
-                          metaValue={goals.atendimento.value > 0 ? `Meta: ${scaledGoals.atendimento.toFixed(1)}%` : undefined}
+                          {...(usePipedrive
+                            ? pdProps(pdAtendimento)
+                            : {
+                                value: `${getCumulativePercent('em atendimento')}%`,
+                                meta: goals.atendimento.value > 0 ? "EM ATENDIMENTO" : undefined,
+                                metaValue: goals.atendimento.value > 0 ? `Meta: ${scaledGoals.atendimento.toFixed(1)}%` : undefined,
+                              })}
                           icon={<Users size={16} />}
-                          statusTag={statusMap.atendimento}
+                          statusTag={usePipedrive ? undefined : statusMap.atendimento}
                         />
 
                         <KPICard
                           title="Reuniões Marcadas"
                           onClick={() => setIsMetricModalOpen({
                             isOpen: true,
-                            title: "Taxa de Reuniões Marcadas",
-                            value: `${getCumulativePercent('reuniao agendada')}%`,
-                            subValue: `Percentual de leads com agendamento confirmado. Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%`
+                            title: usePipedrive ? "Reuniões Marcadas (Pipedrive)" : "Taxa de Reuniões Marcadas",
+                            value: usePipedrive
+                              ? `${fmtPct(pdReuniaoMarcada?.percent ?? 0)} (${pdReuniaoMarcada?.cumulativeCount ?? 0} de ${filterDenom})`
+                              : `${getCumulativePercent('reuniao agendada')}%`,
+                            subValue: usePipedrive
+                              ? `% de leads do Pipedrive que chegaram a "Reuniao Agendada" ou alem`
+                              : `Percentual de leads com agendamento confirmado. Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%`
                           })}
-                          value={`${getCumulativePercent('reuniao agendada')}%`}
-                          meta={goals.reuniaoMarcada.value > 0 ? "AGENDAMENTOS" : undefined}
-                          metaValue={goals.reuniaoMarcada.value > 0 ? `Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%` : undefined}
+                          {...(usePipedrive
+                            ? pdProps(pdReuniaoMarcada)
+                            : {
+                                value: `${getCumulativePercent('reuniao agendada')}%`,
+                                meta: goals.reuniaoMarcada.value > 0 ? "AGENDAMENTOS" : undefined,
+                                metaValue: goals.reuniaoMarcada.value > 0 ? `Meta: ${scaledGoals.reuniaoMarcada.toFixed(1)}%` : undefined,
+                              })}
                           icon={<Calendar size={16} />}
-                          statusTag={statusMap.reuniaoMarcada}
+                          statusTag={usePipedrive ? undefined : statusMap.reuniaoMarcada}
                         />
 
                         <KPICard
                           title="Reuniões Realizadas"
                           onClick={() => setIsMetricModalOpen({
                             isOpen: true,
-                            title: "Taxa de Reuniões Realizadas",
-                            value: `${getCumulativePercent('reuniao realizada')}%`,
-                            subValue: `Percentual de reuniões efetivamente concluídas. Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%`
+                            title: usePipedrive ? "Reuniões Realizadas (Pipedrive)" : "Taxa de Reuniões Realizadas",
+                            value: usePipedrive
+                              ? `${fmtPct(pdReuniaoRealizada?.percent ?? 0)} (${pdReuniaoRealizada?.cumulativeCount ?? 0} de ${filterDenom})`
+                              : `${getCumulativePercent('reuniao realizada')}%`,
+                            subValue: usePipedrive
+                              ? `% de leads do Pipedrive que chegaram a "Reuniao Realizada" ou alem`
+                              : `Percentual de reuniões efetivamente concluídas. Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%`
                           })}
-                          value={`${getCumulativePercent('reuniao realizada')}%`}
-                          meta={goals.reuniaoRealizada.value > 0 ? "CONCLUÍDAS" : undefined}
-                          metaValue={goals.reuniaoRealizada.value > 0 ? `Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%` : undefined}
+                          {...(usePipedrive
+                            ? pdProps(pdReuniaoRealizada)
+                            : {
+                                value: `${getCumulativePercent('reuniao realizada')}%`,
+                                meta: goals.reuniaoRealizada.value > 0 ? "CONCLUÍDAS" : undefined,
+                                metaValue: goals.reuniaoRealizada.value > 0 ? `Meta: ${scaledGoals.reuniaoRealizada.toFixed(1)}%` : undefined,
+                              })}
                           icon={<Check size={16} />}
-                          statusTag={statusMap.reuniaoRealizada}
+                          statusTag={usePipedrive ? undefined : statusMap.reuniaoRealizada}
                         />
 
                         <KPICard
                           title="Vendas"
                           onClick={() => setIsMetricModalOpen({
                             isOpen: true,
-                            title: "Taxa de Conversão Final",
-                            value: `${getCumulativePercent('vendas concluidas')}%`,
-                            subValue: `Percentual de leads transformados em clientes. Meta: ${scaledGoals.vendas.toFixed(1)}%`
+                            title: usePipedrive ? "Vendas Concluídas (Pipedrive)" : "Taxa de Conversão Final",
+                            value: usePipedrive
+                              ? `${fmtPct(((pipedriveFiltered?.wonCount ?? 0) / (filterDenom || 1)) * 100)} (${pipedriveFiltered?.wonCount ?? 0} ganhos de ${filterDenom})`
+                              : `${getCumulativePercent('vendas concluidas')}%`,
+                            subValue: usePipedrive
+                              ? `Negocios marcados como ganhos no pipeline ${pipedrive?.pipelineName?.trim()} — valor total ${FORMATTERS.currency(pipedriveFiltered?.wonValue ?? 0)}`
+                              : `Percentual de leads transformados em clientes. Meta: ${scaledGoals.vendas.toFixed(1)}%`
                           })}
-                          value={`${getCumulativePercent('vendas concluidas')}%`}
-                          meta={goals.vendas.value > 0 ? "CONVERSÃO FINAL" : undefined}
-                          metaValue={goals.vendas.value > 0 ? `Meta: ${scaledGoals.vendas.toFixed(1)}%` : undefined}
+                          {...(usePipedrive
+                            ? {
+                                value: fmtPct(((pipedriveFiltered?.wonCount ?? 0) / (filterDenom || 1)) * 100),
+                                valueColorClass: 'text-emerald-500',
+                                meta: 'GANHOS',
+                                metaValue: `${pipedriveFiltered?.wonCount ?? 0} de ${filterDenom}`,
+                              }
+                            : {
+                                value: `${getCumulativePercent('vendas concluidas')}%`,
+                                meta: goals.vendas.value > 0 ? "CONVERSÃO FINAL" : undefined,
+                                metaValue: goals.vendas.value > 0 ? `Meta: ${scaledGoals.vendas.toFixed(1)}%` : undefined,
+                              })}
                           icon={<Trophy size={16} />}
-                          statusTag={statusMap.vendas}
+                          statusTag={usePipedrive ? undefined : statusMap.vendas}
                           trend="up"
                         />
                       </>
@@ -2676,14 +2965,53 @@ ${JSON.stringify(tabData, null, 2)}`
 
                   <div ref={kanbanRef} className="overflow-x-auto custom-scrollbar pb-4 scroll-smooth">
                     <div className="flex gap-4 min-w-max">
-                      {data?.funnelData?.map((stage, index) => {
+                      {(() => {
+                        // Quando o snapshot do Pipedrive existe (contexto Pedrosa), usamos as etapas e leads do Pipedrive.
+                        // Caso contrario, mantemos a fonte original do Supabase (data.funnelData / data.leadsList).
+                        const PD_PALETTE = ['#3b82f6','#06b6d4','#0ea5e9','#8b5cf6','#a855f7','#ec4899','#f97316','#f59e0b','#10b981','#22c55e'];
+                        const sourceStages: any[] = pipedrive
+                          ? pipedrive.stages.map((s, i) => ({
+                              stage: s.stageName,
+                              count: s.count,
+                              value: s.value,
+                              color: PD_PALETTE[i % PD_PALETTE.length],
+                            }))
+                          : (data?.funnelData || []);
+                        return sourceStages;
+                      })().map((stage: any, index: number) => {
                         // Normalize function for matching
                         const normalizeStr = (s: string) => s.toLowerCase()
                           .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                           .replace(/[\s_]/g, '');
 
                         // Get ALL leads for this stage (not filtered) - using normalized matching
-                        const allStageLeads = (data?.leadsList || []).filter(lead => {
+                        // No contexto Pedrosa, leads vem do Pipedrive em vez do Supabase
+                        // Inclui open/won/lost para o filtro de Status Venda funcionar (Atual/Ganho/Perdido)
+                        const mapPdLead = (l: any, status: 'Atual' | 'Ganho' | 'Perdido') => ({
+                          id: `${status}-${l.id}`,
+                          name: l.name,
+                          email: l.email || '—',
+                          phone: l.phone || '—',
+                          businessTitle: '',
+                          pipeline: pipedrive?.pipelineName?.trim() || '',
+                          stage: l.stageName,
+                          stageId: undefined,
+                          quantity: 1,
+                          date: l.addTime,
+                          tags: [],
+                          statusVenda2: status,
+                          statusVenda2Raw: status,
+                          value: l.value,
+                        });
+                        // Aplica o mesmo filtro de data dos KPIs nos leads do Kanban
+                        const sourceLeadsForKanban: any[] = pipedrive
+                          ? [
+                              ...pipedrive.openLeads.filter(l => inDateRange(l.addTime)).map(l => mapPdLead(l, 'Atual')),
+                              ...pipedrive.wonLeads.filter(l => inDateRange(l.addTime)).map(l => mapPdLead(l, 'Ganho')),
+                              ...pipedrive.lostLeads.filter(l => inDateRange(l.addTime)).map(l => mapPdLead(l, 'Perdido')),
+                            ]
+                          : (data?.leadsList || []);
+                        const allStageLeads = sourceLeadsForKanban.filter((lead: any) => {
                           const leadStageNorm = normalizeStr(lead.stage);
                           const stageNorm = normalizeStr(stage.stage);
                           // Check if the normalized strings match or if one contains the other
@@ -2748,7 +3076,17 @@ ${JSON.stringify(tabData, null, 2)}`
                           return matchesSearch && matchesTags && matchesVendaStatus && matchesPipeline;
                         });
                         const correctedStage = correctedFunnelData.find(s => s.stage === stage.stage);
-                        const percentage = correctedFunnelData[0]?.count ? (((correctedStage?.count || 0) / correctedFunnelData[0].count) * 100).toFixed(1) : '0';
+                        // No modo Pipedrive, % e valor da coluna refletem os filtros (status venda + data + pipeline)
+                        const pdStageFiltered = pipedriveFiltered
+                          ? pipedriveFiltered.stages.find(s => s.stageName === stage.stage)
+                          : null;
+                        const percentage = pdStageFiltered
+                          ? pdStageFiltered.percent.toFixed(1)
+                          : (correctedFunnelData[0]?.count ? (((correctedStage?.count || 0) / correctedFunnelData[0].count) * 100).toFixed(1) : '0');
+                        // Soma de R$ dos leads visiveis (apos todos os filtros)
+                        const stageValueFiltered = pipedrive
+                          ? stageLeads.reduce((acc: number, l: any) => acc + (Number(l.value) || 0), 0)
+                          : (stage.value || 0);
 
                         return (
                           <div
@@ -2785,7 +3123,7 @@ ${JSON.stringify(tabData, null, 2)}`
 
                               <div className="flex items-center justify-between">
                                 <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                                  {FORMATTERS.summarizedCurrency(stage.value || 0)}
+                                  {FORMATTERS.summarizedCurrency(stageValueFiltered)}
                                 </div>
                                 <div className="text-[10px] text-slate-400 font-medium">
                                   {percentage}%
