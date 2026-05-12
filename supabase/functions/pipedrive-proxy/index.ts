@@ -11,7 +11,10 @@
 //     PIPEDRIVE_PEDROSA_PIPELINE_ID=3 \
 //     PIPEDRIVE_OPUS_TOKEN=<token> \
 //     PIPEDRIVE_OPUS_DOMAIN=opus \
-//     PIPEDRIVE_OPUS_PIPELINE_ID=1
+//     PIPEDRIVE_OPUS_PIPELINE_ID=1 \
+//     PIPEDRIVE_VILLAGGIO_TOKEN=<token> \
+//     PIPEDRIVE_VILLAGGIO_DOMAIN=villaggioparadiso \
+//     PIPEDRIVE_VILLAGGIO_PIPELINE_ID=1
 
 const CLIENTS: Record<string, { tokenEnv: string; domainEnv: string; pipelineEnv: string }> = {
   pedrosa: {
@@ -23,6 +26,11 @@ const CLIENTS: Record<string, { tokenEnv: string; domainEnv: string; pipelineEnv
     tokenEnv: 'PIPEDRIVE_OPUS_TOKEN',
     domainEnv: 'PIPEDRIVE_OPUS_DOMAIN',
     pipelineEnv: 'PIPEDRIVE_OPUS_PIPELINE_ID',
+  },
+  villaggio: {
+    tokenEnv: 'PIPEDRIVE_VILLAGGIO_TOKEN',
+    domainEnv: 'PIPEDRIVE_VILLAGGIO_DOMAIN',
+    pipelineEnv: 'PIPEDRIVE_VILLAGGIO_PIPELINE_ID',
   },
 };
 

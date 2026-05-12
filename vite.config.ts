@@ -20,7 +20,10 @@ export default defineConfig(({ mode }) => {
       'process.env.PIPEDRIVE_PEDROSA_PIPELINE_ID': JSON.stringify(env.PIPEDRIVE_PEDROSA_PIPELINE_ID),
       'process.env.PIPEDRIVE_OPUS_TOKEN': JSON.stringify(env.PIPEDRIVE_OPUS_TOKEN),
       'process.env.PIPEDRIVE_OPUS_DOMAIN': JSON.stringify(env.PIPEDRIVE_OPUS_DOMAIN),
-      'process.env.PIPEDRIVE_OPUS_PIPELINE_ID': JSON.stringify(env.PIPEDRIVE_OPUS_PIPELINE_ID)
+      'process.env.PIPEDRIVE_OPUS_PIPELINE_ID': JSON.stringify(env.PIPEDRIVE_OPUS_PIPELINE_ID),
+      'process.env.PIPEDRIVE_VILLAGGIO_TOKEN': JSON.stringify(env.PIPEDRIVE_VILLAGGIO_TOKEN),
+      'process.env.PIPEDRIVE_VILLAGGIO_DOMAIN': JSON.stringify(env.PIPEDRIVE_VILLAGGIO_DOMAIN),
+      'process.env.PIPEDRIVE_VILLAGGIO_PIPELINE_ID': JSON.stringify(env.PIPEDRIVE_VILLAGGIO_PIPELINE_ID)
     },
     resolve: {
       alias: {

@@ -19,9 +19,14 @@ const CONFIGS: Record<string, PipedriveConfig> = {
     domain: process.env.PIPEDRIVE_OPUS_DOMAIN || '',
     pipelineId: Number(process.env.PIPEDRIVE_OPUS_PIPELINE_ID || 0),
   },
+  villaggio: {
+    token: process.env.PIPEDRIVE_VILLAGGIO_TOKEN || '',
+    domain: process.env.PIPEDRIVE_VILLAGGIO_DOMAIN || '',
+    pipelineId: Number(process.env.PIPEDRIVE_VILLAGGIO_PIPELINE_ID || 0),
+  },
 };
 
-export const PIPEDRIVE_CLIENT_KEYS = ['pedrosa', 'opus'] as const;
+export const PIPEDRIVE_CLIENT_KEYS = ['pedrosa', 'opus', 'villaggio'] as const;
 export type PipedriveClientKey = typeof PIPEDRIVE_CLIENT_KEYS[number];
 
 export interface PipedriveStage {
