@@ -26,6 +26,7 @@ import { MarketingEvolutionChart } from './components/MarketingEvolutionChart';
 import { VideoRetentionChart } from './components/VideoRetentionChart';
 import { supabase } from './services/supabase';
 import { fetchPipedrivePipeline, findStage, PipedrivePipelineSnapshot, PIPEDRIVE_CLIENT_KEYS, PipedriveClientKey } from './services/pipedriveService';
+import { META_ACCOUNT_BY_USER_ID, fetchMetaSnapshot, aggregateMetaSnapshots, MetaMarketingSnapshot } from './services/metaService';
 
 const getRowValue = (row: any, possibleKeys: string[]) => {
   if (!row) return null;
@@ -75,6 +76,12 @@ const CAMPAIGN_KEYS = ["Campaign", "Campanha", "campaign_name", "Campaign Name"]
 const ADSET_KEYS = ["Ad Set Name", "Conjunto de Anuncios", "ad_set_name", "adset_name", "Conjunto de anúncios"];
 const AD_KEYS = ["Ad Name", "Nome do Anuncio", "ad_name", "Nome do anúncio", "Anúncio"];
 
+// Overrides de clientInfo quando a tabela Dados_X esta vazia ou incompleta
+// no Supabase. RLS bloqueia escrita anonima, entao mantemos como config local.
+const CLIENT_INFO_OVERRIDES: Record<number, { projectName?: string; vgv?: number; units?: number }> = {
+  3: { projectName: 'Opus', vgv: 40_000_000 },
+};
+
 export const StatusBadge = ({ status }: { status: KPIStatus }) => {
   if (!status) return null;
   const getStatusStyles = () => {
@@ -110,6 +117,9 @@ const App: React.FC = () => {
 
   const [pipedrive, setPipedrive] = useState<PipedrivePipelineSnapshot | null>(null);
   const [pipedriveError, setPipedriveError] = useState<string | null>(null);
+
+  const [metaMarketing, setMetaMarketing] = useState<MetaMarketingSnapshot | null>(null);
+  const [metaError, setMetaError] = useState<string | null>(null);
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('even_auth') === 'true');
   const [currentUser, setCurrentUser] = useState<UserAuth | null>(() => {
@@ -337,6 +347,8 @@ const App: React.FC = () => {
   const pipelineRef = useRef<HTMLDivElement>(null);
 
   const [retentionSortOrder, setRetentionSortOrder] = useState<'default' | 'highest'>('default');
+  // KPI expandido (clique abre overlay com valor exato sem formato resumido)
+  const [expandedKpi, setExpandedKpi] = useState<null | { title: string; exact: string; sub?: string }>(null);
 
   // Stage Expansion for Sales Tab
   const [expandedStage, setExpandedStage] = useState<any | null>(null);
@@ -429,10 +441,9 @@ const App: React.FC = () => {
     const tablesToFetch: string[] = [];
 
     targetIds.forEach(id => {
-      // Skip admin tables (ID 1)
+      // Skip admin tables (ID 1). Marketing nao vem mais do Supabase — vem 100% da Meta Graph API.
       if (id !== 1) {
         tablesToFetch.push(`Dados_${id}`);
-        tablesToFetch.push(`Marketing_${id}`);
         tablesToFetch.push(`Vendas_${id}`);
         tablesToFetch.push(`Status_venda_${id}`);
         tablesToFetch.push(`valores_${id}`);
@@ -572,9 +583,61 @@ const App: React.FC = () => {
       }
     };
     load();
-    const id = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    // Sem polling automatico. Recarregar a pagina ou trocar de cliente refaz a
+    // chamada, mas o cache de 10min em localStorage cobre a maior parte. Isso
+    // protege o "daily request budget" do Pipedrive.
+    return () => { cancelled = true; };
   }, [activePipedriveKey]);
+
+  // Quais user.id estao ativos agora (cliente logado direto, ou cliente(s) selecionado(s) pelo admin)
+  // Admin sem selecao retorna [] (nao busca todos automaticamente — seria muito pesado).
+  const activeUserIds = useMemo<number[]>(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return selectedClientIds;
+    return [currentUser.id];
+  }, [currentUser, selectedClientIds]);
+
+  // Busca snapshot do Meta para o(s) cliente(s) ativo(s). Refaz a cada
+  // troca de user/cliente/datas. Promise.allSettled garante que falha em
+  // 1 conta nao zere o dashboard das outras.
+  useEffect(() => {
+    const accounts = activeUserIds
+      .map(id => META_ACCOUNT_BY_USER_ID[id])
+      .filter((a): a is string => !!a);
+    if (accounts.length === 0) {
+      setMetaMarketing(null);
+      setMetaError(null);
+      return;
+    }
+    let cancelled = false;
+    // Limpa dado velho imediatamente — evita mostrar metricas do cliente anterior
+    setMetaMarketing(null);
+    setMetaError(null);
+    (async () => {
+      try {
+        const results = await Promise.allSettled(
+          accounts.map(a => fetchMetaSnapshot(a, startDate, endDate))
+        );
+        if (cancelled) return;
+        const ok = results
+          .filter((r): r is PromiseFulfilledResult<MetaMarketingSnapshot> => r.status === 'fulfilled')
+          .map(r => r.value);
+        const errs = results
+          .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+          .map(r => (r.reason as Error)?.message || String(r.reason));
+        if (ok.length === 0 && errs.length > 0) {
+          setMetaError(errs.join(' | '));
+          return;
+        }
+        const agg = aggregateMetaSnapshots(ok);
+        setMetaMarketing(agg);
+        setMetaError(errs.length > 0 ? `Falha parcial: ${errs.join(' | ')}` : null);
+      } catch (err: any) {
+        if (!cancelled) setMetaError(err?.message || 'Erro Meta');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeUserIds.join(','), startDate, endDate]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -615,9 +678,8 @@ const App: React.FC = () => {
 
   const filterOptions = useMemo(() => {
     if (!baseData?.rawDataByTable) return { campaigns: [], adSets: [], ads: [] };
-    const marketingTable = Object.keys(baseData.rawDataByTable).find(k => k.toLowerCase().includes('marketing'));
-    if (!marketingTable) return { campaigns: [], adSets: [], ads: [] };
-    const rows = (baseData.rawDataByTable[marketingTable] as any[]);
+    // Marketing vem 100% da Meta — usamos as linhas de la pros filtros.
+    const rows = metaMarketing?.marketingRows ?? [];
     const campaigns = Array.from(new Set(rows.map(r => getRowValue(r, CAMPAIGN_KEYS)).filter(Boolean))).sort() as string[];
     const adSetsRows = selectedCampaigns.length > 0 ? rows.filter(r => selectedCampaigns.includes(getRowValue(r, CAMPAIGN_KEYS) || '')) : rows;
     const adSets = Array.from(new Set(adSetsRows.map(r => getRowValue(r, ADSET_KEYS)).filter(Boolean))).sort() as string[];
@@ -636,7 +698,7 @@ const App: React.FC = () => {
     const pipelines = Array.from(new Set((baseData.leadsList || []).map(lead => lead.pipeline).filter(Boolean))).sort() as string[];
 
     return { campaigns, adSets, ads, tags, vendaStatus, pipelines };
-  }, [baseData, selectedCampaigns, selectedAdSets]);
+  }, [baseData, metaMarketing, selectedCampaigns, selectedAdSets]);
 
   // Unified effect for filter animation
   useEffect(() => {
@@ -648,9 +710,25 @@ const App: React.FC = () => {
 
   const data = useMemo(() => {
     if (!baseData?.rawDataByTable) return baseData;
+
+    // Marketing nao vem mais do Supabase: zeramos toda tabela Marketing_X
+    // e injetamos as linhas da Meta como `Marketing_meta` (mesmo schema).
+    // Isso alimenta os filtros (Campanhas/Conjuntos/Anuncios) e graficos.
+    const augmentedRaw: Record<string, any[]> = {};
+    for (const [k, v] of Object.entries(baseData.rawDataByTable)) {
+      if (!k.toLowerCase().includes('marketing')) augmentedRaw[k] = v as any[];
+    }
+    if (metaMarketing && metaMarketing.marketingRows.length > 0) {
+      augmentedRaw['Marketing_meta'] = metaMarketing.marketingRows;
+    }
+    const augmentedFetchedTables = [
+      ...(baseData.fetchedTables || []).filter(t => !t.toLowerCase().includes('marketing')),
+      ...(metaMarketing && metaMarketing.marketingRows.length > 0 ? ['Marketing_meta'] : []),
+    ];
+
     const filteredRawData: Record<string, any[]> = {};
     const allFilteredRows: any[] = [];
-    Object.entries(baseData.rawDataByTable).forEach(([tableName, rows]) => {
+    Object.entries(augmentedRaw).forEach(([tableName, rows]) => {
       const isProjectInfoTable = tableName.toLowerCase().includes('dados');
       const isStatusOrSalesTable = tableName.toLowerCase().includes('status_venda') || tableName.toLowerCase().includes('vendas');
 
@@ -695,8 +773,42 @@ const App: React.FC = () => {
       filteredRawData[tableName] = filtered;
       allFilteredRows.push(...filtered);
     });
-    return processSupabaseData(allFilteredRows, baseData.fetchedTables || [], filteredRawData, startDate, endDate, selectedPipelines);
-  }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds, selectedPipelines]);
+    const processed = processSupabaseData(allFilteredRows, augmentedFetchedTables, filteredRawData, startDate, endDate, selectedPipelines);
+
+    // Quando ha snapshot do Meta (Facebook Ads) para o(s) cliente(s) ativo(s),
+    // sobrescreve TODAS as metricas de marketing direto com o que o Meta retorna.
+    // Espelha o padrao do Pipedrive (que sobrescreve funnel/leads/vendas).
+    if (metaMarketing) {
+      processed.metrics.totalSpend = metaMarketing.spend;
+      processed.metrics.marketingMetrics = {
+        cpm: metaMarketing.cpm,
+        ctr: metaMarketing.ctr,
+        cpc: metaMarketing.cpc,
+        frequency: metaMarketing.frequency,
+        cpl: metaMarketing.cpl,
+        reach: metaMarketing.reach,
+        impressions: metaMarketing.impressions,
+        clicks: metaMarketing.clicks,
+        leads: metaMarketing.leads,
+        landingPageConvRate: 0,
+      };
+      if (metaMarketing.creativePlayback.length > 0) {
+        processed.creativePlayback = metaMarketing.creativePlayback;
+      }
+    }
+
+    // Aplica overrides de clientInfo quando o Dados_X esta vazio/incompleto.
+    // So aplica se ha exatamente um cliente ativo (admin com 1 selecao ou user direto).
+    if (activeUserIds.length === 1) {
+      const ov = CLIENT_INFO_OVERRIDES[activeUserIds[0]];
+      if (ov) {
+        if (ov.projectName) processed.clientInfo.projectName = ov.projectName;
+        if (typeof ov.vgv === 'number') processed.clientInfo.vgv = ov.vgv;
+        if (typeof ov.units === 'number') processed.clientInfo.totalUnits = ov.units;
+      }
+    }
+    return processed;
+  }, [baseData, startDate, endDate, selectedCampaigns, selectedAdSets, selectedAds, selectedPipelines, metaMarketing, activeUserIds]);
 
 
   const handleDeleteGoals = async () => {
@@ -1380,6 +1492,28 @@ const App: React.FC = () => {
         : (items[i - 1].count > 0 ? Math.min((s.count / items[i - 1].count) * 100, 100) : 0),
     }));
   }, [pipedrive, pipedriveDateFiltered]);
+
+  // Pirâmide unificada Marketing -> Vendas: 9 etapas com taxa de conversão
+  // entre cada uma. Top 5 vem do Meta, ultimas 4 do Pipedrive.
+  const overviewPyramidStages = useMemo(() => {
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_]/g, '');
+    const pipeCount = (name: string) => pipedriveOverviewFunnel?.find(s => norm(s.stage).includes(norm(name)))?.count ?? 0;
+    const stages = [
+      { label: 'Impressões',       count: metaMarketing?.impressions ?? 0, color: '#1d4ed8' },
+      { label: 'Alcance',          count: metaMarketing?.reach ?? 0,       color: '#2563eb' },
+      { label: 'Cliques',          count: metaMarketing?.clicks ?? 0,      color: '#3b82f6' },
+      { label: 'View Page',        count: metaMarketing?.pageViews ?? 0,   color: '#06b6d4' },
+      { label: 'Total de Leads',   count: metaMarketing?.leads ?? 0,       color: '#0ea5e9' },
+      { label: 'Atendimento',      count: pipeCount('atendimento'),        color: '#a855f7' },
+      { label: 'Reunião Agendada', count: pipeCount('reuniao agendada'),   color: '#c026d3' },
+      { label: 'Reunião Realizada',count: pipeCount('reuniao realizada'),  color: '#ec4899' },
+      { label: 'Venda',            count: pipedrive?.wonCount ?? pipeCount('vendas concluidas'), color: '#10b981' },
+    ];
+    return stages.map((s, i) => ({
+      ...s,
+      conversion: i === 0 ? 100 : (stages[i - 1].count > 0 ? (s.count / stages[i - 1].count) * 100 : 0),
+    }));
+  }, [metaMarketing, pipedriveOverviewFunnel, pipedrive]);
 
   // Helper: encontra uma etapa filtrada por nome (fuzzy)
   const findFilteredStage = (...candidates: string[]) => {
@@ -2232,13 +2366,39 @@ ${JSON.stringify(tabData, null, 2)}`
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 px-1 sm:px-4">
                       <div className="flex items-center gap-3">
                         <Filter size={18} className="text-primary" />
-                        <h3 className="text-sm sm:text-lg font-semibold text-slate-800 dark:text-white">Fluxo do Funil de Vendas</h3>
+                        <h3 className="text-sm sm:text-lg font-semibold text-slate-800 dark:text-white">Funil de Vendas</h3>
                       </div>
                       <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                        Total: {(pipedriveOverviewFunnel ?? filteredFunnelForOverview)?.[0]?.count || 0} Leads
+                        Topo: {FORMATTERS.summarized(overviewPyramidStages[0]?.count || 0)}
                       </div>
                     </div>
-                    <FunnelChartComponent data={pipedriveOverviewFunnel ?? filteredFunnelForOverview} />
+                    {pipedriveError && !pipedrive && isPedrosaContext && (
+                      <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-[10px] sm:text-xs text-amber-700 dark:text-amber-300">
+                        ⚠ Pipedrive offline ({pipedriveError}) — as etapas Atendimento/Reunião/Venda voltam quando a conexão restabelecer.
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-0.5">
+                      {overviewPyramidStages.map((stage, i) => {
+                        // Largura visual decrescente em passos fixos pra dar formato de pirâmide
+                        const width = 100 - i * 8;
+                        return (
+                          <div key={stage.label} className="flex flex-col items-center">
+                            {i > 0 && (
+                              <div className="text-[9px] sm:text-[10px] font-bold tracking-wider text-slate-400 dark:text-slate-500 py-0.5">
+                                ▼ {stage.conversion.toFixed(1)}%
+                              </div>
+                            )}
+                            <div
+                              className="relative rounded-md text-white px-3 py-2.5 flex items-center justify-between shadow-sm transition-transform hover:scale-[1.02]"
+                              style={{ width: `${width}%`, backgroundColor: stage.color }}
+                            >
+                              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider truncate">{stage.label}</span>
+                              <span className="text-sm sm:text-base font-black tabular-nums ml-2">{FORMATTERS.number(stage.count)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className="lg:col-span-5 flex flex-col gap-3">
                     <div className="bg-primary dark:bg-primary p-6 sm:p-8 rounded-xl text-white relative overflow-hidden flex flex-col justify-between shadow-lg min-h-[180px] sm:min-h-[220px]">
@@ -2421,13 +2581,13 @@ ${JSON.stringify(tabData, null, 2)}`
                 <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-800/50">
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 divide-x divide-y md:divide-y-0 divide-slate-100 dark:divide-slate-800/50">
                     {[
-                      { title: "Investimento", val: FORMATTERS.summarizedCurrency(data.metrics.totalSpend), icon: <DollarSign size={14} />, meta: FORMATTERS.currency(scaledGoals.amountSpent), status: statusMap.amountSpent },
-                      { title: "Alcance", val: FORMATTERS.summarized(data.metrics.marketingMetrics.reach), icon: <ReachIcon size={14} />, meta: "Único" },
-                      { title: "Impressões", val: FORMATTERS.summarized(data.metrics.marketingMetrics.impressions), icon: <ReachIcon size={14} />, meta: "Visualizações" },
-                      { title: "Frequência", val: data.metrics.marketingMetrics.frequency.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), icon: <RefreshCw size={14} />, meta: scaledGoals.frequency.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }), status: statusMap.frequency },
-                      { title: "CPM (Custo p/ Mil)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpm), icon: <Percent size={14} />, meta: FORMATTERS.currency(scaledGoals.cpm), status: statusMap.cpm }
+                      { title: "Investimento", val: FORMATTERS.summarizedCurrency(data.metrics.totalSpend), exact: FORMATTERS.currency(data.metrics.totalSpend), icon: <DollarSign size={14} />, meta: FORMATTERS.currency(scaledGoals.amountSpent), status: statusMap.amountSpent },
+                      { title: "Alcance", val: FORMATTERS.summarized(data.metrics.marketingMetrics.reach), exact: FORMATTERS.number(data.metrics.marketingMetrics.reach), icon: <ReachIcon size={14} />, meta: "Único" },
+                      { title: "Impressões", val: FORMATTERS.summarized(data.metrics.marketingMetrics.impressions), exact: FORMATTERS.number(data.metrics.marketingMetrics.impressions), icon: <ReachIcon size={14} />, meta: "Visualizações" },
+                      { title: "Frequência", val: data.metrics.marketingMetrics.frequency.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), exact: FORMATTERS.raw(data.metrics.marketingMetrics.frequency), icon: <RefreshCw size={14} />, meta: scaledGoals.frequency.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }), status: statusMap.frequency },
+                      { title: "CPM (Custo p/ Mil)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpm), exact: FORMATTERS.currency(data.metrics.marketingMetrics.cpm), icon: <Percent size={14} />, meta: FORMATTERS.currency(scaledGoals.cpm), status: statusMap.cpm }
                     ].map((kpi, idx) => (
-                      <div key={idx} className="px-4 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
+                      <div key={idx} onClick={() => setExpandedKpi({ title: kpi.title, exact: kpi.exact, sub: kpi.meta })} className="px-4 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors cursor-pointer">
                         <div className="flex items-center gap-2 mb-1.5">
                           <div className="text-primary opacity-60 group-hover:opacity-100 transition-opacity">{kpi.icon}</div>
                           <span className="text-[10px] sm:text-xs font-medium text-slate-500 cursor-default">{kpi.title}</span>
@@ -2446,13 +2606,13 @@ ${JSON.stringify(tabData, null, 2)}`
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 divide-x divide-y md:divide-y-0 divide-slate-100 dark:divide-slate-800/50">
                     {[
-                      { title: "Cliques", val: FORMATTERS.number(data.metrics.marketingMetrics.clicks), icon: <MousePointer2 size={14} />, meta: "Cliques no Link" },
-                      { title: "CPC (Custo p/ Click)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpc), icon: <DollarSign size={14} />, meta: "Custo Médio" },
-                      { title: "CTR (Taxa Click Link)", val: FORMATTERS.percent(data.metrics.marketingMetrics.ctr), icon: <Percent size={14} />, meta: FORMATTERS.percent(scaledGoals.ctr), status: statusMap.ctr },
-                      { title: "Leads (Plataforma)", val: FORMATTERS.number(data.metrics.marketingMetrics.leads), icon: <Users size={14} />, meta: FORMATTERS.number(scaledGoals.leads), status: statusMap.marketingLeads }, // Uses platform leads status
-                      { title: "CPL (Custo p/ Lead)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpl), icon: <CplIcon size={14} />, meta: FORMATTERS.currency(scaledGoals.cpl), status: statusMap.cpl }
+                      { title: "Cliques", val: FORMATTERS.number(data.metrics.marketingMetrics.clicks), exact: FORMATTERS.number(data.metrics.marketingMetrics.clicks), icon: <MousePointer2 size={14} />, meta: "Cliques no Link" },
+                      { title: "CPC (Custo p/ Click)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpc), exact: FORMATTERS.currency(data.metrics.marketingMetrics.cpc), icon: <DollarSign size={14} />, meta: "Custo Médio" },
+                      { title: "CTR (Taxa Click Link)", val: FORMATTERS.percent(data.metrics.marketingMetrics.ctr), exact: data.metrics.marketingMetrics.ctr.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 6 }) + '%', icon: <Percent size={14} />, meta: FORMATTERS.percent(scaledGoals.ctr), status: statusMap.ctr },
+                      { title: "Leads (Plataforma)", val: FORMATTERS.number(data.metrics.marketingMetrics.leads), exact: FORMATTERS.number(data.metrics.marketingMetrics.leads), icon: <Users size={14} />, meta: FORMATTERS.number(scaledGoals.leads), status: statusMap.marketingLeads },
+                      { title: "CPL (Custo p/ Lead)", val: FORMATTERS.currency(data.metrics.marketingMetrics.cpl), exact: FORMATTERS.currency(data.metrics.marketingMetrics.cpl), icon: <CplIcon size={14} />, meta: FORMATTERS.currency(scaledGoals.cpl), status: statusMap.cpl }
                     ].map((kpi, idx) => (
-                      <div key={idx} className="px-4 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors">
+                      <div key={idx} onClick={() => setExpandedKpi({ title: kpi.title, exact: kpi.exact, sub: kpi.meta })} className="px-4 py-4 group hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors cursor-pointer">
                         <div className="flex items-center gap-2 mb-1.5">
                           <div className="text-primary opacity-60 group-hover:opacity-100 transition-opacity">{kpi.icon}</div>
                           <span className="text-[10px] sm:text-xs font-medium text-slate-500 cursor-default">{kpi.title}</span>
@@ -2470,6 +2630,21 @@ ${JSON.stringify(tabData, null, 2)}`
                     ))}
                   </div>
                 </div>
+
+                {expandedKpi && (
+                  <div onClick={() => setExpandedKpi(null)} className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+                    <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-12 relative animate-in zoom-in-95 duration-200">
+                      <button onClick={() => setExpandedKpi(null)} className="absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500" aria-label="Fechar">
+                        <X size={20} />
+                      </button>
+                      <p className="text-sm uppercase tracking-widest font-bold text-slate-500 mb-4">{expandedKpi.title}</p>
+                      <p className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white leading-tight break-all">{expandedKpi.exact}</p>
+                      {expandedKpi.sub && (
+                        <p className="mt-4 text-sm text-slate-500">{['Alcance', 'Impressões', 'Cliques', 'CPC (Custo p/ Click)'].includes(expandedKpi.title) ? '' : 'Meta: '}{expandedKpi.sub}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <MarketingEvolutionChart data={(() => {
                   if (!data?.rawDataByTable) return [];

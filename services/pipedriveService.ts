@@ -123,7 +123,27 @@ const extractPerson = (d: RawPipedriveDeal) => {
   return { name, email, phone };
 };
 
+// Cache em localStorage. Evita queimar token a cada reload em sessoes de
+// desenvolvimento ou navegacao entre abas dentro do TTL.
+const CACHE_TTL_MS = 10 * 60_000; // 10 minutos
+
+const readCache = (client: string): PipedrivePipelineSnapshot | null => {
+  try {
+    const raw = localStorage.getItem(`pipedrive_cache_${client}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PipedrivePipelineSnapshot;
+    if (!parsed.fetchedAt || Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
+    return parsed;
+  } catch { return null; }
+};
+const writeCache = (client: string, snap: PipedrivePipelineSnapshot) => {
+  try { localStorage.setItem(`pipedrive_cache_${client}`, JSON.stringify(snap)); } catch {}
+};
+
 export const fetchPipedrivePipeline = async (client: PipedriveClientKey): Promise<PipedrivePipelineSnapshot> => {
+  const cached = readCache(client);
+  if (cached) return cached;
+
   const cfg = CONFIGS[client];
   if (!cfg || !cfg.token || !cfg.domain || !cfg.pipelineId) {
     throw new Error(`Pipedrive nao configurado para cliente: ${client}`);
@@ -195,7 +215,7 @@ export const fetchPipedrivePipeline = async (client: PipedriveClientKey): Promis
   const wonLeads: PipedriveLead[] = wonInPipeline.map(toLead('won')).sort(sortByDate);
   const lostLeads: PipedriveLead[] = lostInPipeline.map(toLead('lost')).sort(sortByDate);
 
-  return {
+  const snapshot: PipedrivePipelineSnapshot = {
     pipelineId: cfg.pipelineId,
     pipelineName,
     stages: stageStats,
@@ -210,6 +230,8 @@ export const fetchPipedrivePipeline = async (client: PipedriveClientKey): Promis
     lostLeads,
     fetchedAt: Date.now(),
   };
+  writeCache(client, snapshot);
+  return snapshot;
 };
 
 const norm = (s: string) =>
