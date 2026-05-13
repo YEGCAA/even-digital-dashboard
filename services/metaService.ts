@@ -6,12 +6,14 @@ const GRAPH_VERSION = 'v21.0';
 const META_TOKEN = process.env.META_ACCESS_TOKEN || '';
 
 // user.id (logins) -> ad_account_id no Meta Ads
+// Villaggio (id 6) fora por enquanto: campanha do Meta vinculada e' antiga
+// (de outra agencia). Quando subir a campanha nova, reativar com:
+//   6: 'act_900981759160832', // Villaggio
 export const META_ACCOUNT_BY_USER_ID: Record<number, string> = {
   2: 'act_1107966070778536', // Pedrosa
   3: 'act_1722410995784956', // Opus (vmb_inc)
   4: 'act_825307016532821',  // Lani
   5: 'act_847018621762805',  // M One
-  6: 'act_900981759160832',  // Villaggio
 };
 
 export interface MetaMarketingSnapshot {
