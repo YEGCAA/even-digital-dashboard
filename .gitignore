@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Bundle da Facilita gerado por scripts/collect-facilita-bundle.mjs — so vive
+# no branch gh-pages (publicado pelo workflow .github/workflows/facilita-bundle.yml),
+# nunca no codigo-fonte.
+/data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
