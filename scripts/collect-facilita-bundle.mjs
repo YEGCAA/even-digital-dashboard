@@ -109,7 +109,7 @@ async function fetchDetails(client, deals) {
               value: f.value && typeof f.value === 'object' ? f.value.value : f.value,
             })),
           }));
-        const historical = (full.historical || []).map((h) => ({ message: h.message, created_at: h.created_at }));
+        const historical = (full.historical || []).map((h) => ({ message: h.message, created_at: h.created_at, type: h.type, subject: h.subject }));
         details[d.id] = { groups: trafego, historical };
       } catch (err) {
         console.warn(`[${client}] falha no detalhe do negocio ${d.id}: ${err.message}`);
