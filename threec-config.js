@@ -1,3 +1,3 @@
 window.THREEC_TOKENS = [
-  { label: "Beatriz", token: "yBGZkOInVZ7DuCoPj7ZCXMyBiCjj5HIQTJdgS451ljizzCwMUVyHc8Fj43ef" },
+  { label: "Gestor", token: "3cs_mULtlaYmxnw7o5eMZ0CGam6uXErwCGnc8k1CJ0UIuWKAN9gh3UNbTQHYMgny" },
 ];
